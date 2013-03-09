@@ -1,3 +1,6 @@
 [submodule "lib/basil"]
 	path = lib/basil
 	url = https://github.com/soxtoby/basil.git
+[submodule "lib/chai"]
+	path = lib/chai
+	url = https://github.com/chaijs/chai.git
