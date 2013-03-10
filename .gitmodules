@@ -4,3 +4,6 @@
 [submodule "lib/chai"]
 	path = lib/chai
 	url = https://github.com/chaijs/chai.git
+[submodule "lib/sinon-chai"]
+	path = lib/sinon-chai
+	url = https://github.com/domenic/sinon-chai.git
