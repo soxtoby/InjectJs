@@ -9,10 +9,14 @@
 
     Builder.prototype = {
         build: function () {
+            this._containerBuilt = true;
             return new Container(this._registrations);
         },
 
         register: function (constructor) {
+            if (this._containerBuilt)
+                throw new PostBuildRegistrationError();
+
             var registration = new Registration(constructor);
             this._registrations.push(registration);
             return registration;
@@ -75,6 +79,11 @@
             ? type
             : type.$injectId;
     }
+    
+    function PostBuildRegistrationError() {
+        this.message = 'Cannot register anything else once the container has been built';
+    }
+    PostBuildRegistrationError.prototype = new Error();
 
     global.Inject = {
         Builder: Builder

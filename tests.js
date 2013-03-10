@@ -31,6 +31,16 @@
         });
     });
 
+    when("container has been built", function() {
+        builder.build();
+
+        when("registering another type throws an exception", function() {
+            should.throw(function () {
+                builder.register(function () { });
+            }, Inject.PostBuildRegistrationError);
+        });
+    });
+
     when("subtype is registered as super type", function () {
         function superClass() { }
         function subClass() { }
