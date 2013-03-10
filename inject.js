@@ -42,7 +42,7 @@
     Container.prototype = {
         resolve: function (type) {
             var key = getKey(type);
-            
+
             var registration = this._registrations[key];
             if (registration) {
                 if (typeof registration.value == 'function')
@@ -53,8 +53,8 @@
 
             return this._construct(type);
         },
-        
-        _construct: function(constructor) {
+
+        _construct: function (constructor) {
             var dependencies = constructor.dependencies || [];
             var args = dependencies.map(this.resolve, this);
 
@@ -64,13 +64,16 @@
     };
 
     function getOrCreateKey(type) {
-        if (!type.$injectId)
-            type.$injectId = uid++;
-        return type.$injectId;
+        var key = getKey(type);
+        return key
+            ? key
+            : (type.$injectId = uid++);
     }
 
     function getKey(type) {
-        return type.$injectId;
+        return typeof type == 'string'
+            ? type
+            : type.$injectId;
     }
 
     global.Inject = {

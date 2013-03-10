@@ -87,4 +87,42 @@
             });
         });
     });
+
+    when("type is registered as a named dependency", function() {
+        function type() { }
+
+        builder.register(type).as('named');
+
+        when("resolving named dependency", function() {
+            var sut = builder.build();
+            var result = sut.resolve('named');
+
+            it("resolves to instance of the registered type", function() {
+                result.should.be.an.instanceOf(type);
+            });
+        });
+
+        when("another type is registered with a different name", function() {
+            function type2() { }
+
+            builder.register(type2).as('different');
+            var sut = builder.build();
+
+            when("resolving first name", function() {
+                var result = sut.resolve('named');
+
+                it("resolves to instance of the first type", function () {
+                    result.should.be.an.instanceOf(type);
+                });
+            });
+
+            when("resolving the second name", function() {
+                var result = sut.resolve('different');
+
+                it("resolves to instance of the second type", function() {
+                    result.should.be.an.instanceOf(type2);
+                });
+            });
+        });
+    });
 });
