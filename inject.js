@@ -80,12 +80,18 @@
             : type.$injectId;
     }
     
+    function ctor(dependencies, constructor) {
+        constructor.dependencies = dependencies;
+        return constructor;
+    }
+    
     function PostBuildRegistrationError() {
         this.message = 'Cannot register anything else once the container has been built';
     }
     PostBuildRegistrationError.prototype = new Error();
 
     global.Inject = {
-        Builder: Builder
+        Builder: Builder,
+        ctor: ctor
     };
 })(window);

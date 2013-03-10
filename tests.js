@@ -16,10 +16,12 @@
         when("resolving unregistered class with dependencies", function () {
             function dependency1() { }
             function dependency2() { }
-            function existingClass(d1, d2) {
-                this.dependency1 = d1;
-                this.dependency2 = d2;
-            }
+
+            var existingClass = Inject.ctor([dependency1, dependency2],
+                function(d1, d2) {
+                    this.dependency1 = d1;
+                    this.dependency2 = d2;
+                });
             existingClass.dependencies = [dependency1, dependency2];
 
             var result = sut.resolve(existingClass);
