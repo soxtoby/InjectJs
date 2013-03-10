@@ -13,18 +13,20 @@
             return new Container(this._registrations);
         },
 
-        register: function (constructor) {
+        register: function (type) {
             if (this._containerBuilt)
                 throw new PostBuildRegistrationError();
 
-            var registration = new Registration(constructor);
+            var registration = typeof type == "function"
+                ? new Registration(constructorFactory(type))
+                : new Registration(instanceFactory(type));
             this._registrations.push(registration);
             return registration;
         }
     };
 
-    function Registration(value) {
-        this.value = value;
+    function Registration(factory) {
+        this.factory = factory;
         this.registeredAs = [];
     }
 
@@ -47,25 +49,38 @@
         resolve: function (type) {
             var key = getKey(type);
 
-            var registration = this._registrations[key];
-            if (registration) {
-                if (typeof registration.value == 'function')
-                    return this._construct(registration.value);
-                else
-                    return registration.value;
-            }
+            var registration = type instanceof Registration
+                ? type
+                : this._registrations[key];
+            return registration
+                ? registration.factory(this)
+                : constructorFactory(type)(this);
+        }
+    };
 
-            return this._construct(type);
-        },
-
-        _construct: function (constructor) {
+    function constructorFactory(constructor) {
+        return function (container) {
             var dependencies = constructor.dependencies || [];
-            var args = dependencies.map(this.resolve, this);
+            var args = dependencies.map(container.resolve, container);
 
             var resolvedConstructor = Function.prototype.bind.apply(constructor, [null].concat(args));
             return new resolvedConstructor();
-        }
-    };
+        };
+    }
+
+    function instanceFactory(value) {
+        return function () {
+            return value;
+        };
+    }
+
+    function factoryFor(type) {
+        return new Registration(function(container) {
+            return function () {
+                return container.resolve(type);
+            };
+        });
+    }
 
     function getOrCreateKey(type) {
         var key = getKey(type);
@@ -79,12 +94,12 @@
             ? type
             : type.$injectId;
     }
-    
+
     function ctor(dependencies, constructor) {
         constructor.dependencies = dependencies;
         return constructor;
     }
-    
+
     function PostBuildRegistrationError() {
         this.message = 'Cannot register anything else once the container has been built';
     }
@@ -92,6 +107,7 @@
 
     global.Inject = {
         Builder: Builder,
-        ctor: ctor
+        ctor: ctor,
+        factoryFor: factoryFor
     };
 })(window);

@@ -13,22 +13,33 @@
             });
         });
 
-        when("resolving unregistered class with dependencies", function () {
+        when("type has multiple dependencies", function () {
             function dependency1() { }
             function dependency2() { }
 
-            var existingClass = Inject.ctor([dependency1, dependency2],
+            var type = Inject.ctor([dependency1, dependency2],
                 function(d1, d2) {
                     this.dependency1 = d1;
                     this.dependency2 = d2;
                 });
-            existingClass.dependencies = [dependency1, dependency2];
 
-            var result = sut.resolve(existingClass);
+            when("resolving type", function() {
+                var result = sut.resolve(type);
 
-            it("instantiates unregistered class with dependencies", function() {
-                result.dependency1.should.be.an.instanceOf(dependency1);
-                result.dependency2.should.be.an.instanceOf(dependency2);
+                it("instantiates type with dependencies", function () {
+                    result.dependency1.should.be.an.instanceOf(dependency1);
+                    result.dependency2.should.be.an.instanceOf(dependency2);
+                });
+            });
+
+            when("resolving factory function with no parameters", function() {
+                var factory = sut.resolve(Inject.factoryFor(type));
+
+                then("calling factory instantiates type with dependencies", function() {
+                    var result = factory();
+                    result.dependency1.should.be.an.instanceOf(dependency1);
+                    result.dependency2.should.be.an.instanceOf(dependency2);    
+                });
             });
         });
     });
