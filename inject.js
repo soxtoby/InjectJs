@@ -78,6 +78,11 @@
                 ? registration.factory(this)
                 : constructorFactory(type)(this);
 
+            if (resolved == null)
+                throw new Error(
+                    (typeof type == 'function' ? "Type" : "'" + type + "'")
+                    + ' resolved to null');
+
             if (typeof resolved.dispose == 'function')
                 this._registerDisposable(resolved);
 

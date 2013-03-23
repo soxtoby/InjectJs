@@ -163,13 +163,31 @@
         when("type is resolved", function () {
             var result = sut.resolve(type);
 
-            then("container is passed in to factory", function() {
+            then("container is passed in to factory", function () {
                 factory.firstCall.args[0].should.be.an.instanceOf(Inject.Container);
             });
 
             then("resolves to factory return value", function () {
                 result.should.equal(expectedResult);
             });
+        });
+    });
+
+    when("factory method returns undefined", function () {
+        function type() { }
+        builder.registerFactory(function () { }).as([type, 'name']);
+        var sut = builder.build();
+
+        then("resolving type throws", function () {
+            should.throw(function() {
+                sut.resolve(type);
+            }, 'Type resolved to null');
+        });
+
+        then("resolving name throws", function() {
+            should.throw(function() {
+                sut.resolve('name');
+            }, "'name' resolved to null");
         });
     });
 
