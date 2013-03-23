@@ -153,10 +153,9 @@
 
     when("type is disposable", function () {
         function type() {
-            this.dispose = sinon.spy();
+            this.dispose = this.disposeMethod = sinon.spy();
         }
 
-        builder.register(type);
         var sut = builder.build();
 
         when("type has been resolved twice", function () {
@@ -167,8 +166,20 @@
                 sut.dispose();
 
                 then("resolved objects are disposed as well", function () {
-                    resolved1.dispose.should.have.been.called;
-                    resolved2.dispose.should.have.been.called;
+                    resolved1.disposeMethod.should.have.been.called;
+                    resolved2.disposeMethod.should.have.been.called;
+                });
+            });
+
+            when("resolved object is disposed", function() {
+                resolved1.dispose();
+
+                when("container is disposed", function() {
+                    sut.dispose();
+
+                    then("disposed resolved object is not disposed again", function() {
+                        resolved1.disposeMethod.should.have.been.calledOnce;
+                    });
                 });
             });
         });
@@ -208,6 +219,33 @@
 
             then("type can be resolved from inner container", function () {
                 inner.resolve('foo').should.be.an.instanceOf(type);
+            });
+        });
+
+        when("outer container is disposed", function() {
+            var outer = builder.build();
+            var inner = outer.buildSubContainer();
+            this.spy(inner, 'dispose');
+
+            outer.dispose();
+
+            then("inner container is disposed", function() {
+                inner.dispose.should.have.been.called;
+            });
+        });
+
+        when("inner container is disposed", function() {
+            var outer = builder.build();
+            var inner = outer.buildSubContainer();
+            inner.dispose();
+            this.spy(inner, 'dispose');
+
+            when("outer container is disposed", function() {
+                outer.dispose();
+
+                then("inner container is not disposed again", function() {
+                    inner.dispose.should.not.have.been.called;
+                });
             });
         });
     });

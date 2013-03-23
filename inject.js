@@ -63,7 +63,7 @@
                 : constructorFactory(type)(this);
 
             if (typeof resolved.dispose == 'function')
-                this._disposables.push(resolved);
+                this._registerDisposable(resolved);
 
             return resolved;
         },
@@ -81,11 +81,31 @@
                     subContainer._registrations[key] = this._registrations[key];
             }, this);
 
+            this._registerDisposable(subContainer);
+
             return subContainer;
         },
         
+        _registerDisposable: function (disposable) {
+            var oldDispose = disposable.dispose;
+            disposable.dispose = function () {
+                this._unregisterDisposable(disposable);
+                oldDispose.call(disposable);
+            }.bind(this);
+            this._disposables.push(disposable);
+        },
+        
+        _unregisterDisposable: function(disposable) {
+            for (var i = 0; i < this._disposables.length; i++) {
+                if (this._disposables[i] == disposable) {
+                    this._disposables.splice(i, 1);
+                    break;
+                }
+            }
+        },
+        
         dispose: function() {
-            this._disposables.forEach(function(disposable) {
+            this._disposables.slice().forEach(function(disposable) {
                 disposable.dispose();
             });
         }
