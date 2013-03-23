@@ -17,10 +17,16 @@
             if (this._containerBuilt)
                 throw new Error('Cannot register anything else once the container has been built');
 
-            var registration = typeof type == 'function'
-                ? new Registration(constructorFactory(type))
-                : new Registration(valueFactory(type));
+            var factory = typeof type == 'function'
+                ? constructorFactory(type)
+                : valueFactory(type);
+            var registration = this.registerFactory(factory);
             registration.as(type);
+            return registration;
+        },
+        
+        registerFactory: function(factory) {
+            var registration = new Registration(factory);
             this._registrations.push(registration);
             return registration;
         }
@@ -165,6 +171,7 @@
 
     global.Inject = {
         Builder: Builder,
+        Container: Container,
         ctor: ctor,
         factoryFor: factoryFor
     };

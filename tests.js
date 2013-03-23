@@ -151,6 +151,28 @@
         });
     });
 
+    when("factory method is registered as type", function () {
+        function type() { }
+        var expectedResult = new type();
+        var factory = sinon.stub().returns(expectedResult);
+        builder
+            .registerFactory(factory)
+            .as(type);
+        var sut = builder.build();
+
+        when("type is resolved", function () {
+            var result = sut.resolve(type);
+
+            then("container is passed in to factory", function() {
+                factory.firstCall.args[0].should.be.an.instanceOf(Inject.Container);
+            });
+
+            then("resolves to factory return value", function () {
+                result.should.equal(expectedResult);
+            });
+        });
+    });
+
     when("type is disposable", function () {
         function type() {
             this.dispose = this.disposeMethod = sinon.spy();
@@ -280,14 +302,14 @@
                 });
             });
 
-            when("sub-container is created", function() {
+            when("sub-container is created", function () {
                 var subSut = sut.buildSubContainer();
 
-                when("resolved from each container", function() {
+                when("resolved from each container", function () {
                     var result1 = sut.resolve(type);
                     var result2 = subSut.resolve(type);
 
-                    then("same instance returned both times", function() {
+                    then("same instance returned both times", function () {
                         result1.should.equal(result2);
                     });
                 });
