@@ -1,4 +1,5 @@
 ﻿describe("inject.js", function () {
+    function type() { }
     var builder = new Inject.Builder();
 
     when("nothing registered", function () {
@@ -23,14 +24,14 @@
             function dependency1() { }
             function dependency2() { }
 
-            var type = Inject.ctor([dependency1, dependency2],
+            var typeWithDependencies = Inject.ctor([dependency1, dependency2],
                 function (d1, d2) {
                     this.dependency1 = d1;
                     this.dependency2 = d2;
                 });
 
             when("resolving type", function () {
-                var result = sut.resolve(type);
+                var result = sut.resolve(typeWithDependencies);
 
                 it("instantiates type with dependencies", function () {
                     result.dependency1.should.be.an.instanceOf(dependency1);
@@ -39,7 +40,7 @@
             });
 
             when("resolving factory function with no parameters", function () {
-                var factory = sut.resolve(Inject.factoryFor(type));
+                var factory = sut.resolve(Inject.factoryFor(typeWithDependencies));
 
                 then("calling factory instantiates type with dependencies", function () {
                     var result = factory();
@@ -99,7 +100,6 @@
     });
 
     when("object instance is registered as type", function () {
-        function type() { }
         var obj = {};
         builder.register(obj).as(type);
         var sut = builder.build();
@@ -114,8 +114,6 @@
     });
 
     when("type is registered as a named dependency", function () {
-        function type() { }
-
         builder.register(type).as('named');
 
         when("resolving named dependency", function () {
@@ -152,7 +150,6 @@
     });
 
     when("factory method is registered as type", function () {
-        function type() { }
         var expectedResult = new type();
         var factory = sinon.stub().returns(expectedResult);
         builder
@@ -174,33 +171,32 @@
     });
 
     when("factory method returns undefined", function () {
-        function type() { }
         builder.registerFactory(function () { }).as([type, 'name']);
         var sut = builder.build();
 
         then("resolving type throws", function () {
-            should.throw(function() {
+            should.throw(function () {
                 sut.resolve(type);
             }, 'Type resolved to undefined');
         });
 
-        then("resolving name throws", function() {
-            should.throw(function() {
+        then("resolving name throws", function () {
+            should.throw(function () {
                 sut.resolve('name');
             }, "'name' resolved to undefined");
         });
     });
 
     when("type is disposable", function () {
-        function type() {
+        function disposableType() {
             this.dispose = this.disposeMethod = sinon.spy();
         }
 
         var sut = builder.build();
 
         when("type has been resolved twice", function () {
-            var resolved1 = sut.resolve(type);
-            var resolved2 = sut.resolve(type);
+            var resolved1 = sut.resolve(disposableType);
+            var resolved2 = sut.resolve(disposableType);
 
             when("container is disposed", function () {
                 sut.dispose();
@@ -236,7 +232,6 @@
         });
 
         when("type is registered in original container", function () {
-            function type() { }
             builder.register(type).as('foo');
             var outer = builder.build();
             var inner = outer.buildSubContainer();
@@ -247,7 +242,6 @@
         });
 
         when("type is registered in sub-container", function () {
-            function type() { }
             var outer = builder.build();
             var inner = outer.buildSubContainer(function (innerBuilder) {
                 innerBuilder.register(type).as('foo');
@@ -291,8 +285,6 @@
     });
 
     describe("lifetimes", function () {
-        function type() { }
-
         when("no lifetime specified", function () {
             builder.register(type);
             var sut = builder.build();
