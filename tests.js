@@ -4,10 +4,10 @@
     when("nothing registered", function () {
         var sut = builder.build();
 
-        then("registering another type throws an exception", function () {
+        then("registering another type throws", function () {
             should.throw(function () {
                 builder.register(function () { });
-            }, Inject.PostBuildRegistrationError);
+            }, 'Cannot register anything else once the container has been built');
         });
 
         when("resolving existing class", function () {
@@ -47,6 +47,12 @@
                     result.dependency2.should.be.an.instanceOf(dependency2);
                 });
             });
+        });
+
+        then("resolving an unregistered name throws", function () {
+            should.throw(function () {
+                sut.resolve('foo');
+            }, "Nothing registered as 'foo'");
         });
     });
 
@@ -145,7 +151,7 @@
         });
     });
 
-    when("type is disposable", function() {
+    when("type is disposable", function () {
         function type() {
             this.dispose = sinon.spy();
         }
@@ -153,17 +159,55 @@
         builder.register(type);
         var sut = builder.build();
 
-        when("type has been resolved twice", function() {
+        when("type has been resolved twice", function () {
             var resolved1 = sut.resolve(type);
             var resolved2 = sut.resolve(type);
 
             when("container is disposed", function () {
                 sut.dispose();
 
-                then("resolved objects are disposed as well", function() {
+                then("resolved objects are disposed as well", function () {
                     resolved1.dispose.should.have.been.called;
                     resolved2.dispose.should.have.been.called;
                 });
+            });
+        });
+    });
+
+    when("building a sub-container", function () {
+        then("registration callback is called with a Builder", function () {
+            var registration = sinon.spy();
+            var sut = builder.build();
+            sut.buildSubContainer(registration);
+
+            registration.should.have.been.called;
+            registration.firstCall.args[0].should.be.an.instanceOf(Inject.Builder);
+        });
+
+        when("type is registered in original container", function () {
+            function type() { }
+            builder.register(type).as('foo');
+            var outer = builder.build();
+            var inner = outer.buildSubContainer();
+
+            then("type can be resolved from inner container", function () {
+                inner.resolve('foo').should.be.an.instanceOf(type);
+            });
+        });
+
+        when("type is registered in sub-container", function () {
+            function type() { }
+            var outer = builder.build();
+            var inner = outer.buildSubContainer(function (innerBuilder) {
+                innerBuilder.register(type).as('foo');
+            });
+
+            then("type can't be resolved from outer container", function () {
+                should.throw(function () { outer.resolve('foo'); });
+            });
+
+            then("type can be resolved from inner container", function () {
+                inner.resolve('foo').should.be.an.instanceOf(type);
             });
         });
     });

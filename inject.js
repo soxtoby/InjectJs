@@ -15,9 +15,9 @@
 
         register: function (type) {
             if (this._containerBuilt)
-                throw new PostBuildRegistrationError();
+                throw new Error('Cannot register anything else once the container has been built');
 
-            var registration = typeof type == "function"
+            var registration = typeof type == 'function'
                 ? new Registration(constructorFactory(type))
                 : new Registration(instanceFactory(type));
             this._registrations.push(registration);
@@ -55,14 +55,33 @@
                 ? type
                 : this._registrations[key];
 
+            if (!registration && !(typeof type == 'function'))
+                throw new Error("Nothing registered as '" + type + "'");
+
             var resolved = registration
                 ? registration.factory(this)
                 : constructorFactory(type)(this);
 
-            if (typeof resolved.dispose == "function")
+            if (typeof resolved.dispose == 'function')
                 this._disposables.push(resolved);
 
             return resolved;
+        },
+        
+        buildSubContainer: function (registration) {
+            var builder = new Builder();
+            
+            if (registration)
+                registration(builder);
+            
+            var subContainer = builder.build();
+
+            Object.keys(this._registrations).forEach(function(key) {
+                if (!(key in subContainer._registrations))
+                    subContainer._registrations[key] = this._registrations[key];
+            }, this);
+
+            return subContainer;
         },
         
         dispose: function() {
@@ -113,11 +132,6 @@
         constructor.dependencies = dependencies;
         return constructor;
     }
-
-    function PostBuildRegistrationError() {
-        this.message = 'Cannot register anything else once the container has been built';
-    }
-    PostBuildRegistrationError.prototype = new Error();
 
     global.Inject = {
         Builder: Builder,
