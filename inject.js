@@ -38,6 +38,8 @@
 
     function Container(registrations) {
         this._registrations = {};
+        this._disposables = [];
+        
         registrations.forEach(function (registration) {
             registration.registeredAs.forEach(function (type) {
                 this._registrations[getOrCreateKey(type)] = registration;
@@ -52,9 +54,21 @@
             var registration = type instanceof Registration
                 ? type
                 : this._registrations[key];
-            return registration
+
+            var resolved = registration
                 ? registration.factory(this)
                 : constructorFactory(type)(this);
+
+            if (typeof resolved.dispose == "function")
+                this._disposables.push(resolved);
+
+            return resolved;
+        },
+        
+        dispose: function() {
+            this._disposables.forEach(function(disposable) {
+                disposable.dispose();
+            });
         }
     };
 

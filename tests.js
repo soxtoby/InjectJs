@@ -4,6 +4,12 @@
     when("nothing registered", function () {
         var sut = builder.build();
 
+        then("registering another type throws an exception", function () {
+            should.throw(function () {
+                builder.register(function () { });
+            }, Inject.PostBuildRegistrationError);
+        });
+
         when("resolving existing class", function () {
             function unregisteredClass() { };
             var result = sut.resolve(unregisteredClass);
@@ -18,12 +24,12 @@
             function dependency2() { }
 
             var type = Inject.ctor([dependency1, dependency2],
-                function(d1, d2) {
+                function (d1, d2) {
                     this.dependency1 = d1;
                     this.dependency2 = d2;
                 });
 
-            when("resolving type", function() {
+            when("resolving type", function () {
                 var result = sut.resolve(type);
 
                 it("instantiates type with dependencies", function () {
@@ -32,25 +38,15 @@
                 });
             });
 
-            when("resolving factory function with no parameters", function() {
+            when("resolving factory function with no parameters", function () {
                 var factory = sut.resolve(Inject.factoryFor(type));
 
-                then("calling factory instantiates type with dependencies", function() {
+                then("calling factory instantiates type with dependencies", function () {
                     var result = factory();
                     result.dependency1.should.be.an.instanceOf(dependency1);
-                    result.dependency2.should.be.an.instanceOf(dependency2);    
+                    result.dependency2.should.be.an.instanceOf(dependency2);
                 });
             });
-        });
-    });
-
-    when("container has been built", function() {
-        builder.build();
-
-        when("registering another type throws an exception", function() {
-            should.throw(function () {
-                builder.register(function () { });
-            }, Inject.PostBuildRegistrationError);
         });
     });
 
@@ -97,41 +93,41 @@
     });
 
     when("object instance is registered as type", function () {
-        function type() {}
+        function type() { }
         var obj = {};
         builder.register(obj).as(type);
         var sut = builder.build();
 
-        when("type is resolved", function() {
+        when("type is resolved", function () {
             var result = sut.resolve(type);
 
-            it("resolves to the object", function() {
+            it("resolves to the object", function () {
                 result.should.equal(obj);
             });
         });
     });
 
-    when("type is registered as a named dependency", function() {
+    when("type is registered as a named dependency", function () {
         function type() { }
 
         builder.register(type).as('named');
 
-        when("resolving named dependency", function() {
+        when("resolving named dependency", function () {
             var sut = builder.build();
             var result = sut.resolve('named');
 
-            it("resolves to instance of the registered type", function() {
+            it("resolves to instance of the registered type", function () {
                 result.should.be.an.instanceOf(type);
             });
         });
 
-        when("another type is registered with a different name", function() {
+        when("another type is registered with a different name", function () {
             function type2() { }
 
             builder.register(type2).as('different');
             var sut = builder.build();
 
-            when("resolving first name", function() {
+            when("resolving first name", function () {
                 var result = sut.resolve('named');
 
                 it("resolves to instance of the first type", function () {
@@ -139,11 +135,34 @@
                 });
             });
 
-            when("resolving the second name", function() {
+            when("resolving the second name", function () {
                 var result = sut.resolve('different');
 
-                it("resolves to instance of the second type", function() {
+                it("resolves to instance of the second type", function () {
                     result.should.be.an.instanceOf(type2);
+                });
+            });
+        });
+    });
+
+    when("type is disposable", function() {
+        function type() {
+            this.dispose = sinon.spy();
+        }
+
+        builder.register(type);
+        var sut = builder.build();
+
+        when("type has been resolved twice", function() {
+            var resolved1 = sut.resolve(type);
+            var resolved2 = sut.resolve(type);
+
+            when("container is disposed", function () {
+                sut.dispose();
+
+                then("resolved objects are disposed as well", function() {
+                    resolved1.dispose.should.have.been.called;
+                    resolved2.dispose.should.have.been.called;
                 });
             });
         });
