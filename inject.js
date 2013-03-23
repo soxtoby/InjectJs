@@ -19,7 +19,8 @@
 
             var registration = typeof type == 'function'
                 ? new Registration(constructorFactory(type))
-                : new Registration(instanceFactory(type));
+                : new Registration(valueFactory(type));
+            registration.as(type);
             this._registrations.push(registration);
             return registration;
         }
@@ -33,13 +34,22 @@
     Registration.prototype = {
         as: function (interfaces) {
             this.registeredAs = this.registeredAs.concat(interfaces);
+        },
+
+        singleInstance: function () {
+            var instanceFactory = this.factory;
+            var instance;
+            this.factory = function (container) {
+                return instance
+                    || (instance = instanceFactory(container));
+            };
         }
     };
 
     function Container(registrations) {
         this._registrations = {};
         this._disposables = [];
-        
+
         registrations.forEach(function (registration) {
             registration.registeredAs.forEach(function (type) {
                 this._registrations[getOrCreateKey(type)] = registration;
@@ -67,16 +77,16 @@
 
             return resolved;
         },
-        
+
         buildSubContainer: function (registration) {
             var builder = new Builder();
-            
+
             if (registration)
                 registration(builder);
-            
+
             var subContainer = builder.build();
 
-            Object.keys(this._registrations).forEach(function(key) {
+            Object.keys(this._registrations).forEach(function (key) {
                 if (!(key in subContainer._registrations))
                     subContainer._registrations[key] = this._registrations[key];
             }, this);
@@ -85,7 +95,7 @@
 
             return subContainer;
         },
-        
+
         _registerDisposable: function (disposable) {
             var oldDispose = disposable.dispose;
             disposable.dispose = function () {
@@ -94,8 +104,8 @@
             }.bind(this);
             this._disposables.push(disposable);
         },
-        
-        _unregisterDisposable: function(disposable) {
+
+        _unregisterDisposable: function (disposable) {
             for (var i = 0; i < this._disposables.length; i++) {
                 if (this._disposables[i] == disposable) {
                     this._disposables.splice(i, 1);
@@ -103,9 +113,9 @@
                 }
             }
         },
-        
-        dispose: function() {
-            this._disposables.slice().forEach(function(disposable) {
+
+        dispose: function () {
+            this._disposables.slice().forEach(function (disposable) {
                 disposable.dispose();
             });
         }
@@ -121,14 +131,14 @@
         };
     }
 
-    function instanceFactory(value) {
+    function valueFactory(value) {
         return function () {
             return value;
         };
     }
 
     function factoryFor(type) {
-        return new Registration(function(container) {
+        return new Registration(function (container) {
             return function () {
                 return container.resolve(type);
             };

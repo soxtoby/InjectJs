@@ -1,4 +1,4 @@
-﻿describe("injection", function () {
+﻿describe("inject.js", function () {
     var builder = new Inject.Builder();
 
     when("nothing registered", function () {
@@ -171,13 +171,13 @@
                 });
             });
 
-            when("resolved object is disposed", function() {
+            when("resolved object is disposed", function () {
                 resolved1.dispose();
 
-                when("container is disposed", function() {
+                when("container is disposed", function () {
                     sut.dispose();
 
-                    then("disposed resolved object is not disposed again", function() {
+                    then("disposed resolved object is not disposed again", function () {
                         resolved1.disposeMethod.should.have.been.calledOnce;
                     });
                 });
@@ -222,29 +222,74 @@
             });
         });
 
-        when("outer container is disposed", function() {
+        when("outer container is disposed", function () {
             var outer = builder.build();
             var inner = outer.buildSubContainer();
             this.spy(inner, 'dispose');
 
             outer.dispose();
 
-            then("inner container is disposed", function() {
+            then("inner container is disposed", function () {
                 inner.dispose.should.have.been.called;
             });
         });
 
-        when("inner container is disposed", function() {
+        when("inner container is disposed", function () {
             var outer = builder.build();
             var inner = outer.buildSubContainer();
             inner.dispose();
             this.spy(inner, 'dispose');
 
-            when("outer container is disposed", function() {
+            when("outer container is disposed", function () {
                 outer.dispose();
 
-                then("inner container is not disposed again", function() {
+                then("inner container is not disposed again", function () {
                     inner.dispose.should.not.have.been.called;
+                });
+            });
+        });
+    });
+
+    describe("lifetimes", function () {
+        function type() { }
+
+        when("no lifetime specified", function () {
+            builder.register(type);
+            var sut = builder.build();
+
+            when("resolved twice", function () {
+                var result1 = sut.resolve(type);
+                var result2 = sut.resolve(type);
+
+                then("two separate instances are created", function () {
+                    result1.should.not.equal(result2);
+                });
+            });
+        });
+
+        when("registered with single instance lifetime", function () {
+            builder.register(type).singleInstance();
+            var sut = builder.build();
+
+            when("resolved twice", function () {
+                var result1 = sut.resolve(type);
+                var result2 = sut.resolve(type);
+
+                then("same instance returned both times", function () {
+                    result1.should.equal(result2);
+                });
+            });
+
+            when("sub-container is created", function() {
+                var subSut = sut.buildSubContainer();
+
+                when("resolved from each container", function() {
+                    var result1 = sut.resolve(type);
+                    var result2 = subSut.resolve(type);
+
+                    then("same instance returned both times", function() {
+                        result1.should.equal(result2);
+                    });
                 });
             });
         });
