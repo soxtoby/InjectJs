@@ -181,13 +181,13 @@
         then("resolving type throws", function () {
             should.throw(function() {
                 sut.resolve(type);
-            }, 'Type resolved to null');
+            }, 'Type resolved to undefined');
         });
 
         then("resolving name throws", function() {
             should.throw(function() {
                 sut.resolve('name');
-            }, "'name' resolved to null");
+            }, "'name' resolved to undefined");
         });
     });
 
@@ -309,27 +309,48 @@
 
         when("registered with single instance lifetime", function () {
             builder.register(type).singleInstance();
-            var sut = builder.build();
+            var outer = builder.build();
 
-            when("resolved twice", function () {
-                var result1 = sut.resolve(type);
-                var result2 = sut.resolve(type);
+            when("resolved twice from same container", function () {
+                var result1 = outer.resolve(type);
+                var result2 = outer.resolve(type);
 
                 then("same instance returned both times", function () {
                     result1.should.equal(result2);
                 });
             });
 
-            when("sub-container is created", function () {
-                var subSut = sut.buildSubContainer();
+            when("resolved from outer & inner containers", function () {
+                var inner = outer.buildSubContainer();
+                var result1 = outer.resolve(type);
+                var result2 = inner.resolve(type);
 
-                when("resolved from each container", function () {
-                    var result1 = sut.resolve(type);
-                    var result2 = subSut.resolve(type);
+                then("same instance returned both times", function () {
+                    result1.should.equal(result2);
+                });
+            });
+        });
 
-                    then("same instance returned both times", function () {
-                        result1.should.equal(result2);
-                    });
+        when("registered with instance per container lifetime", function () {
+            builder.register(type).instancePerContainer();
+            var outer = builder.build();
+
+            when("resolved twice from same container", function () {
+                var result1 = outer.resolve(type);
+                var result2 = outer.resolve(type);
+
+                then("same instance returned both times", function () {
+                    result1.should.equal(result2);
+                });
+            });
+
+            when("resolved from outer & inner containers", function () {
+                var inner = outer.buildSubContainer();
+                var result1 = outer.resolve(type);
+                var result2 = inner.resolve(type);
+
+                then("two separate instances are created", function () {
+                    result1.should.not.equal(result2);
                 });
             });
         });

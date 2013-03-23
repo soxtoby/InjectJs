@@ -24,8 +24,8 @@
             registration.as(type);
             return registration;
         },
-        
-        registerFactory: function(factory) {
+
+        registerFactory: function (factory) {
             var registration = new Registration(factory);
             this._registrations.push(registration);
             return registration;
@@ -35,6 +35,7 @@
     function Registration(factory) {
         this.factory = factory;
         this.registeredAs = [];
+        this._id = uid++;
     }
 
     Registration.prototype = {
@@ -49,12 +50,22 @@
                 return instance
                     || (instance = instanceFactory(container));
             };
+        },
+
+        instancePerContainer: function () {
+            var instanceFactory = this.factory;
+            this.factory = function (container) {
+                if (!(this._id in container._containerScopedInstances))
+                    container._containerScopedInstances[this._id] = instanceFactory(container);
+                return container._containerScopedInstances[this._id];
+            };
         }
     };
 
     function Container(registrations) {
         this._registrations = {};
         this._disposables = [];
+        this._containerScopedInstances = {};
 
         registrations.forEach(function (registration) {
             registration.registeredAs.forEach(function (type) {
@@ -81,7 +92,7 @@
             if (resolved == null)
                 throw new Error(
                     (typeof type == 'function' ? "Type" : "'" + type + "'")
-                    + ' resolved to null');
+                    + ' resolved to ' + resolved);
 
             if (typeof resolved.dispose == 'function')
                 this._registerDisposable(resolved);
