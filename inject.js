@@ -35,6 +35,7 @@
     function Registration(factory) {
         this.factory = factory;
         this.registeredAs = [];
+        this.parameterHooks = [];
         this._id = uid++;
     }
 
@@ -59,8 +60,17 @@
                     container._containerScopedInstances[this._id] = instanceFactory(container);
                 return container._containerScopedInstances[this._id];
             };
+        },
+
+        withParameter: function (matchParameter, resolveValue) {
+            this.parameterHooks.push(new ParameterHook(matchParameter, resolveValue));
         }
     };
+
+    function ParameterHook(matchParameter, resolveValue) {
+        this.matches = matchParameter;
+        this.resolve = resolveValue;
+    }
 
     function Container(registrations) {
         this._registrations = {};
@@ -98,6 +108,19 @@
                 this._registerDisposable(resolved);
 
             return resolved;
+        },
+        
+        resolveParameter: function(parameter) {
+            var constructorRegistration = this._registrations[getKey(parameter.constructor)];
+            
+            if (constructorRegistration) {
+                var parameterHooks = constructorRegistration.parameterHooks;
+                for (var i = 0; i < parameterHooks.length; i++)
+                    if (parameterHooks[i].matches(parameter))
+                        return parameterHooks[i].resolve(this, parameter);
+            }
+            
+            return this.resolve(parameter.type);
         },
 
         buildSubContainer: function (registration) {
@@ -144,13 +167,25 @@
     };
 
     function constructorFactory(constructor) {
+        var dependencies = constructor.dependencies || [];
+        var paramNames = /\((.*?)\)/.exec(constructor.toString())[1]
+            .split(',').map(function (p) { return p.trim(); });
+        var parameters = dependencies.map(function(d, i) {
+            return new Parameter(constructor, d, paramNames[i], i);
+        });
+        
         return function (container) {
-            var dependencies = constructor.dependencies || [];
-            var args = dependencies.map(container.resolve, container);
-
+            var args = parameters.map(container.resolveParameter, container);
             var resolvedConstructor = Function.prototype.bind.apply(constructor, [null].concat(args));
             return new resolvedConstructor();
         };
+    }
+    
+    function Parameter(constructor, type, name, index) {
+        this.constructor = constructor;
+        this.type = type;
+        this.name = name;
+        this.index = index;
     }
 
     function valueFactory(value) {
@@ -188,6 +223,7 @@
     global.Inject = {
         Builder: Builder,
         Container: Container,
+        Parameter: Parameter,
         ctor: ctor,
         factoryFor: factoryFor
     };

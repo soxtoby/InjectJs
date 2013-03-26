@@ -1,5 +1,12 @@
 ﻿describe("inject.js", function () {
     function type() { }
+    function dependency1() { }
+    function dependency2() { }
+    var typeWithDependencies = Inject.ctor([dependency1, dependency2],
+        function (d1, d2) {
+            this.dependency1 = d1;
+            this.dependency2 = d2;
+        });
     var builder = new Inject.Builder();
 
     when("nothing registered", function () {
@@ -21,15 +28,6 @@
         });
 
         when("type has multiple dependencies", function () {
-            function dependency1() { }
-            function dependency2() { }
-
-            var typeWithDependencies = Inject.ctor([dependency1, dependency2],
-                function (d1, d2) {
-                    this.dependency1 = d1;
-                    this.dependency2 = d2;
-                });
-
             when("resolving type", function () {
                 var result = sut.resolve(typeWithDependencies);
 
@@ -51,9 +49,8 @@
         });
 
         then("resolving an unregistered name throws", function () {
-            should.throw(function () {
-                sut.resolve('foo');
-            }, "Nothing registered as 'foo'");
+            (function () { sut.resolve('foo'); })
+                .should.throw("Nothing registered as 'foo'");
         });
     });
 
@@ -145,6 +142,31 @@
                 it("resolves to instance of the second type", function () {
                     result.should.be.an.instanceOf(type2);
                 });
+            });
+        });
+    });
+
+    when("type is registered with parameter registration", function () {
+        var dependency1Instance = new dependency1();
+        var parameterResolver = sinon.stub().returns(dependency1Instance);
+        builder.register(typeWithDependencies)
+            .withParameter(
+                function(p) { return p.type == dependency1; },
+                parameterResolver);
+        var sut = builder.build();
+
+        when("type is resolved", function() {
+            var result = sut.resolve(typeWithDependencies);
+
+            then("parameter resolver called with container & parameter", function() {
+                var args = parameterResolver.firstCall.args;
+                args[0].should.be.an.instanceOf(Inject.Container);
+                args[1].should.deep.equal(new Inject.Parameter(typeWithDependencies, dependency1, 'd1', 0));
+            });
+
+            then("parameter is resolved to parameter factory result", function() {
+                result.dependency1.should.equal(dependency1Instance);
+                result.dependency2.should.be.an.instanceOf(dependency2);
             });
         });
     });
