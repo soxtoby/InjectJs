@@ -42,6 +42,7 @@
     Registration.prototype = {
         as: function (interfaces) {
             this.registeredAs = this.registeredAs.concat(interfaces);
+            return this;
         },
 
         singleInstance: function () {
@@ -51,6 +52,7 @@
                 return instance
                     || (instance = instanceFactory(container));
             };
+            return this;
         },
 
         instancePerContainer: function () {
@@ -60,10 +62,12 @@
                     container._containerScopedInstances[this._id] = instanceFactory(container);
                 return container._containerScopedInstances[this._id];
             };
+            return this;
         },
 
         withParameter: function (matchParameter, resolveValue) {
             this.parameterHooks.push(new ParameterHook(matchParameter, resolveValue));
+            return this;
         }
     };
 
@@ -76,6 +80,7 @@
         this._registrations = {};
         this._disposables = [];
         this._containerScopedInstances = {};
+        this._registrationScope = [];
 
         registrations.forEach(function (registration) {
             registration.registeredAs.forEach(function (type) {
@@ -86,18 +91,11 @@
 
     Container.prototype = {
         resolve: function (type) {
-            var key = getKey(type);
+            var registration = this.getRegistration(type);
 
-            var registration = type instanceof Registration
-                ? type
-                : this._registrations[key];
-
-            if (!registration && !(typeof type == 'function'))
-                throw new Error("Nothing registered as '" + type + "'");
-
-            var resolved = registration
-                ? registration.factory(this)
-                : constructorFactory(type)(this);
+            this._registrationScope.push(registration);
+            var resolved = registration.factory(this);
+            this._registrationScope.pop();
 
             if (resolved == null)
                 throw new Error(
@@ -109,17 +107,29 @@
 
             return resolved;
         },
-        
-        resolveParameter: function(parameter) {
-            var constructorRegistration = this._registrations[getKey(parameter.constructor)];
-            
+
+        getRegistration: function (type) {
+            var registration = type instanceof Registration
+                ? type
+                : this._registrations[getKey(type)];
+
+            if (!registration && !(typeof type == 'function'))
+                throw new Error("Nothing registered as '" + type + "'");
+
+            return registration
+               || new Registration(constructorFactory(type));
+        },
+
+        resolveParameter: function (parameter) {
+            var constructorRegistration = this._registrationScope[this._registrationScope.length - 1];
+
             if (constructorRegistration) {
                 var parameterHooks = constructorRegistration.parameterHooks;
                 for (var i = 0; i < parameterHooks.length; i++)
                     if (parameterHooks[i].matches(parameter))
                         return parameterHooks[i].resolve(this, parameter);
             }
-            
+
             return this.resolve(parameter.type);
         },
 
@@ -151,12 +161,9 @@
         },
 
         _unregisterDisposable: function (disposable) {
-            for (var i = 0; i < this._disposables.length; i++) {
-                if (this._disposables[i] == disposable) {
-                    this._disposables.splice(i, 1);
-                    break;
-                }
-            }
+            extract(this._disposables, function (d) {
+                return d == disposable;
+            });
         },
 
         dispose: function () {
@@ -170,19 +177,18 @@
         var dependencies = constructor.dependencies || [];
         var paramNames = /\((.*?)\)/.exec(constructor.toString())[1]
             .split(',').map(function (p) { return p.trim(); });
-        var parameters = dependencies.map(function(d, i) {
-            return new Parameter(constructor, d, paramNames[i], i);
+        var parameters = dependencies.map(function (d, i) {
+            return new Parameter(d, paramNames[i], i);
         });
-        
+
         return function (container) {
             var args = parameters.map(container.resolveParameter, container);
             var resolvedConstructor = Function.prototype.bind.apply(constructor, [null].concat(args));
             return new resolvedConstructor();
         };
     }
-    
-    function Parameter(constructor, type, name, index) {
-        this.constructor = constructor;
+
+    function Parameter(type, name, index) {
         this.type = type;
         this.name = name;
         this.index = index;
@@ -194,12 +200,42 @@
         };
     }
 
-    function factoryFor(type) {
+    function factoryFor(type, params) {
         return new Registration(function (container) {
             return function () {
-                return container.resolve(type);
+                var specifiedParams = pairArgsWithParams(arguments);
+
+                var typeRegistration = container.getRegistration(type);
+                var parameterisedRegistration = buildParameterisedRegistration(typeRegistration, specifiedParams);
+
+                return container.resolve(parameterisedRegistration);
             };
         });
+
+        function pairArgsWithParams(args) {
+            return (params || []).map(function (paramType, i) {
+                return { type: paramType, value: args[i] };
+            });
+        }
+
+        function buildParameterisedRegistration(typeRegistration, specifiedParams) {
+            var parameterisedRegistration = new Registration(typeRegistration.factory);
+            parameterisedRegistration.parameterHooks = [useSpecifiedParameter()]
+                .concat(typeRegistration.parameterHooks);
+            return parameterisedRegistration;
+
+            function useSpecifiedParameter() {
+                return new ParameterHook(
+                    function (p) { return specifiedParams.some(matchesTypeOf(p)); },
+                    function (c, p) { return extract(specifiedParams, matchesTypeOf(p)).value; });
+            }
+        }
+
+        function matchesTypeOf(parameter) {
+            return function (other) {
+                return other.type == parameter.type;
+            };
+        }
     }
 
     function getOrCreateKey(type) {
@@ -218,6 +254,14 @@
     function ctor(dependencies, constructor) {
         constructor.dependencies = dependencies;
         return constructor;
+    }
+
+    function extract(array, predicate) {
+        for (var i = 0; i < array.length; i++) {
+            if (predicate(array[i])) {
+                return array.splice(i, 1)[0];
+            }
+        }
     }
 
     global.Inject = {
