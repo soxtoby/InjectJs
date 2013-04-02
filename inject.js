@@ -206,8 +206,9 @@
 
     function constructorFactory(constructor) {
         var dependencies = constructor.dependencies || [];
-        var paramNames = /\((.*?)\)/.exec(constructor.toString())[1]
-            .split(',').map(function (p) { return p.trim(); });
+        var paramNames = constructor.parameters
+            || /\((.*?)\)/.exec(constructor.toString())[1]
+                .split(',').map(function (p) { return p.trim(); });
         var parameters = dependencies.map(function (d, i) {
             return new Parameter(d, paramNames[i], i);
         });

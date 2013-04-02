@@ -68,7 +68,7 @@
     });
 
     describe("registration", function () {
-        describe("registration for type", function () {
+        when("setting up a registration for type", function () {
             var registration = builder.forType(type);
 
             when("subtype created for type", function () {
@@ -132,7 +132,7 @@
             });
         });
 
-        describe("registration for key", function () {
+        when("setting up a registration for key", function () {
             var registration = builder.forKey('named');
 
             when("type created for key", function () {
@@ -172,7 +172,7 @@
             });
         });
 
-        when("type is registered with parameter registration", function () {
+        when("type is registered with parameter hook", function () {
             var dependency1Instance = new dependency1();
             var parameterResolver = sinon.stub().returns(dependency1Instance);
             builder.forType(typeWithDependencies)
@@ -197,6 +197,26 @@
             });
         });
 
+        when("type specifies its own parameter names", function () {
+            var typeWithParameters = Injection.ctor(['foo'], function (originalName) { });
+            typeWithParameters.parameters = ['specifiedName'];
+
+            when("type is registered with parameter hook", function () {
+                var parameterResolver = sinon.stub().returns({});
+                builder.forType(typeWithParameters)
+                    .useParameterHook(function () { return true; }, parameterResolver);
+                var sut = builder.build();
+
+                when("type is resolved", function () {
+                    sut.resolve(typeWithParameters);
+
+                    then("parameter resolver called with type's parameter name", function () {
+                        parameterResolver.firstCall.args[1].name.should.equal('specifiedName');
+                    });
+                });
+            });
+        });
+
         when("factory method returns undefined", function () {
             builder.forType(type).call(function () { });
             var sut = builder.build();
@@ -212,11 +232,11 @@
             var registration = builder.create(type);
             var sut = builder.build();
 
-            then("registration is returned", function() {
+            then("registration is returned", function () {
                 registration.should.be.an.instanceOf(Injection.Registration);
             });
 
-            when("type is resolved", function() {
+            when("type is resolved", function () {
                 var result = sut.resolve(type);
 
                 then("type resolves to instance of type", function () {
@@ -229,7 +249,7 @@
             var registration = builder.createSingle(type);
             var sut = builder.build();
 
-            then("registration is returned", function() {
+            then("registration is returned", function () {
                 registration.should.be.an.instanceOf(Injection.Registration);
             });
 
@@ -246,12 +266,12 @@
         when("registering a factory method", function () {
             var expectedResult = new type();
             var registration = builder.call(function () { return expectedResult; });
-            
+
             then("registration is returned", function () {
                 registration.should.be.an.instanceOf(Injection.Registration);
             });
 
-            when("registration is set up for type", function() {
+            when("registration is set up for type", function () {
                 var chain = registration.for(type);
                 var sut = builder.build();
 
@@ -259,17 +279,17 @@
                     chain.should.equal(registration);
                 });
 
-                when("type is resolved", function() {
+                when("type is resolved", function () {
                     var result = sut.resolve(type);
 
-                    then("type resolves to factory return value", function() {
+                    then("type resolves to factory return value", function () {
                         result.should.equal(expectedResult);
                     });
                 });
             });
         });
 
-        when("registering a value", function() {
+        when("registering a value", function () {
             var value = {};
             var registration = builder.use(value);
 
@@ -277,18 +297,18 @@
                 registration.should.be.an.instanceOf(Injection.Registration);
             });
 
-            when("registration is set up for key", function() {
+            when("registration is set up for key", function () {
                 var chain = registration.for('key');
                 var sut = builder.build();
-                
+
                 it("can be chained", function () {
                     chain.should.equal(registration);
                 });
 
-                when("key is resolved", function() {
+                when("key is resolved", function () {
                     var result = sut.resolve('key');
 
-                    then("key resolves to value", function() {
+                    then("key resolves to value", function () {
                         result.should.equal(value);
                     });
                 });
