@@ -428,24 +428,7 @@
                 chain.should.equal(registration);
             });
 
-            when("resolved twice from same container", function () {
-                var result1 = outer.resolve(type);
-                var result2 = outer.resolve(type);
-
-                then("same instance returned both times", function () {
-                    result1.should.equal(result2);
-                });
-            });
-
-            when("resolved from outer & inner containers", function () {
-                var inner = outer.buildSubContainer();
-                var result1 = outer.resolve(type);
-                var result2 = inner.resolve(type);
-
-                then("same instance returned both times", function () {
-                    result1.should.equal(result2);
-                });
-            });
+            typeIsResolvedToSingleton(outer);
         });
 
         when("registered with instance per container lifetime", function () {
@@ -457,9 +440,73 @@
                 chain.should.equal(registration);
             });
 
+            typeIsResolvedToInstancePerContainer(outer);
+        });
+
+        when("default lifetime set to singleton", function () {
+            builder.useSingleInstances();
+
+            whenNothingIsRegistered(typeIsResolvedToSingleton);
+
+            whenTypeIsRegisteredWithDefaultLifetime(typeIsResolvedToSingleton);
+
+            whenTypeIsRegisteredWithInstancePerDependencyLifetime(typeIsResolvedToInstancePerDependency);
+        });
+
+        when("default lifetime set to instance per container", function () {
+            builder.useInstancePerContainer();
+
+            whenNothingIsRegistered(typeIsResolvedToInstancePerContainer);
+
+            whenTypeIsRegisteredWithDefaultLifetime(typeIsResolvedToInstancePerContainer);
+
+            whenTypeIsRegisteredWithInstancePerDependencyLifetime(typeIsResolvedToInstancePerDependency);
+        });
+
+        when("default lifetime set to instance per dependency", function () {
+            builder.useInstancePerDependency();
+
+            whenNothingIsRegistered(typeIsResolvedToInstancePerDependency);
+
+            whenTypeIsRegisteredWithDefaultLifetime(typeIsResolvedToInstancePerDependency);
+
+            when("type is registered with singleton lifetime", function () {
+                builder.createSingle(type);
+                var sut = builder.build();
+
+                typeIsResolvedToSingleton(sut);
+            });
+        });
+
+        function whenNothingIsRegistered(assert) {
+            when("nothing is registered", function () {
+                var sut = builder.build();
+                assert(sut);
+            });
+        }
+
+        function whenTypeIsRegisteredWithDefaultLifetime(assert) {
+            when("type is registered with default lifetime", function () {
+                builder.create(type);
+                var sut = builder.build();
+
+                assert(sut);
+            });
+        }
+
+        function whenTypeIsRegisteredWithInstancePerDependencyLifetime(assert) {
+            when("type is registered with instance per dependency lifetime", function () {
+                builder.create(type).perDependency();
+                var sut = builder.build();
+
+                assert(sut);
+            });
+        }
+
+        function typeIsResolvedToSingleton(container) {
             when("resolved twice from same container", function () {
-                var result1 = outer.resolve(type);
-                var result2 = outer.resolve(type);
+                var result1 = container.resolve(type);
+                var result2 = container.resolve(type);
 
                 then("same instance returned both times", function () {
                     result1.should.equal(result2);
@@ -467,14 +514,46 @@
             });
 
             when("resolved from outer & inner containers", function () {
-                var inner = outer.buildSubContainer();
-                var result1 = outer.resolve(type);
+                var inner = container.buildSubContainer();
+                var result1 = container.resolve(type);
+                var result2 = inner.resolve(type);
+
+                then("same instance returned both times", function () {
+                    result1.should.equal(result2);
+                });
+            });
+        }
+
+        function typeIsResolvedToInstancePerContainer(container) {
+            when("resolved twice from same container", function () {
+                var result1 = container.resolve(type);
+                var result2 = container.resolve(type);
+
+                then("same instance returned both times", function () {
+                    result1.should.equal(result2);
+                });
+            });
+
+            when("resolved from outer & inner containers", function () {
+                var inner = container.buildSubContainer();
+                var result1 = container.resolve(type);
                 var result2 = inner.resolve(type);
 
                 then("two separate instances are created", function () {
                     result1.should.not.equal(result2);
                 });
             });
-        });
+        }
+
+        function typeIsResolvedToInstancePerDependency(container) {
+            when("resolved twice", function () {
+                var result1 = container.resolve(type);
+                var result2 = container.resolve(type);
+
+                then("two separate instances are created", function () {
+                    result1.should.not.equal(result2);
+                });
+            });
+        }
     });
 });

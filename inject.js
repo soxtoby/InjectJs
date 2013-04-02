@@ -2,15 +2,23 @@
     'use strict';
 
     var uid = 1;
+    var globallyScopedInstances = {};
 
     function Builder() {
         this._registrations = [];
+        this._defaultLifetime = instancePerDependency;
     };
 
     Builder.prototype = {
         build: function () {
             this._containerBuilt = true;
-            return new Container(this._registrations);
+
+            var registrationMap = {};
+            this._registrations.forEach(function (registration) {
+                registrationMap[getOrCreateKey(registration.registeredAs)] = registration;
+            });
+
+            return new Container(registrationMap, this._defaultLifetime);
         },
 
         forType: function (type) {
@@ -37,19 +45,31 @@
             return this._createRegistration().use(value);
         },
 
+        useSingleInstances: function () {
+            this._defaultLifetime = singleInstance;
+        },
+        
+        useInstancePerContainer: function() {
+            this._defaultLifetime = instancePerContainer;
+        },
+        
+        useInstancePerDependency: function() {
+            this._defaultLifetime = instancePerDependency;
+        },
+
         _createRegistration: function () {
             if (this._containerBuilt)
                 throw new Error('Cannot register anything else once the container has been built');
 
-            var registration = new Registration();
+            var registration = new Registration(this._defaultLifetime);
             this._registrations.push(registration);
             return registration;
         }
     };
 
-    function Registration() {
+    function Registration(lifetime) {
+        this._lifetime = lifetime || instancePerDependency;
         this.parameterHooks = [];
-        this._id = uid++;
     }
 
     Registration.prototype = {
@@ -69,17 +89,13 @@
         },
 
         call: function (factory) {
-            this.factory = this._instanceFactory = factory;
+            this._instanceFactory = factory;
             return this;
         },
 
         once: function () {
-            var instanceFactory = this._instanceFactory;
-            var instance;
-            return this.call(function (container) {
-                return instance
-                    || (instance = instanceFactory(container));
-            });
+            this._lifetime = singleInstance;
+            return this;
         },
 
         createSingle: function (type) {
@@ -87,12 +103,17 @@
         },
 
         perContainer: function () {
-            var instanceFactory = this._instanceFactory;
-            return this.call(function (container) {
-                if (!(this._id in container._containerScopedInstances))
-                    container._containerScopedInstances[this._id] = instanceFactory(container);
-                return container._containerScopedInstances[this._id];
-            });
+            this._lifetime = instancePerContainer;
+            return this;
+        },
+        
+        perDependency: function() {
+            this._lifetime = instancePerDependency;
+            return this;
+        },
+        
+        factory: function(container) {
+            return this._lifetime(this._instanceFactory)(container);
         },
 
         useParameterHook: function (matchParameter, resolveValue) {
@@ -104,20 +125,39 @@
         }
     };
 
+    function instancePerDependency(instanceFactory) {
+        return instanceFactory;
+    }
+
+    function singleInstance(instanceFactory) {
+        var id = getOrCreateKey(this.registeredAs);
+        return function (container) {
+            if (!(id in globallyScopedInstances))
+                globallyScopedInstances[id] = instanceFactory(container);
+            return globallyScopedInstances[id];
+        };
+    }
+
+    function instancePerContainer(instanceFactory) {
+        var id = getOrCreateKey(this.registeredAs);
+        return function (container) {
+            if (!(id in container._containerScopedInstances))
+                container._containerScopedInstances[id] = instanceFactory(container);
+            return container._containerScopedInstances[id];
+        };
+    }
+
     function ParameterHook(matchParameter, resolveValue) {
         this.matches = matchParameter;
         this.resolve = resolveValue;
     }
 
-    function Container(registrations) {
-        this._registrations = {};
+    function Container(registrationMap, defaultLifetime) {
+        this._registrations = registrationMap;
+        this._defaultLifetime = defaultLifetime;
         this._disposables = [];
         this._containerScopedInstances = {};
         this._registrationScope = [];
-
-        registrations.forEach(function (registration) {
-            this._registrations[getOrCreateKey(registration.registeredAs)] = registration;
-        }, this);
     };
 
     Container.prototype = {
@@ -148,7 +188,7 @@
                 throw new Error("Nothing registered as '" + type + "'");
 
             return registration
-               || new Registration(type).create(type);
+               || new Registration(this._defaultLifetime).create(type);
         },
 
         resolveParameter: function (parameter) {
@@ -171,6 +211,8 @@
                 registration(builder);
 
             var subContainer = builder.build();
+
+            subContainer._defaultLifetime = this._defaultLifetime;
 
             Object.keys(this._registrations).forEach(function (key) {
                 if (!(key in subContainer._registrations))
@@ -253,13 +295,13 @@
 
         function buildParameterisedRegistration(typeRegistration, specifiedParams) {
             var parameterisedRegistration = new Registration()
-                .call(typeRegistration.factory)
+                .call(typeRegistration._instanceFactory)
                 .useParameterHook(useSpecifiedParameter());
-            
-            typeRegistration.parameterHooks.forEach(function(hook) {
+
+            typeRegistration.parameterHooks.forEach(function (hook) {
                 parameterisedRegistration.useParameterHook(hook);
             });
-            
+
             return parameterisedRegistration;
 
             function useSpecifiedParameter() {
