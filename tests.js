@@ -2,19 +2,19 @@
     function type() { }
     function dependency1() { }
     function dependency2() { }
-    var typeWithDependencies = Inject.ctor([dependency1, dependency2],
+    var typeWithDependencies = Injection.ctor([dependency1, dependency2],
         function (d1, d2) {
             this.dependency1 = d1;
             this.dependency2 = d2;
         });
-    var builder = new Inject.Builder();
+    var builder = new Injection.Builder();
 
     describe("empty container", function () {
         var sut = builder.build();
 
         then("attempting to register another type with builder throws error", function () {
             should.throw(function () {
-                builder.register(function () { });
+                builder.forType(function () { });
             }, 'Cannot register anything else once the container has been built');
         });
 
@@ -38,7 +38,7 @@
             });
 
             when("resolving factory function with no parameters", function () {
-                var factory = sut.resolve(Inject.factoryFor(typeWithDependencies));
+                var factory = sut.resolve(Injection.factoryFor(typeWithDependencies));
 
                 then("calling factory instantiates type with dependencies", function () {
                     var result = factory();
@@ -48,13 +48,13 @@
             });
 
             when("resolving factory function with partial parameters", function () {
-                var factory = sut.resolve(Inject.factoryFor(typeWithDependencies, [dependency2]));
+                var factory = sut.resolve(Injection.factoryFor(typeWithDependencies, [dependency2]));
 
                 when("calling factory function", function () {
                     var dependency2Instance = new dependency2();
                     var result = factory(dependency2Instance);
 
-                    then("type constructed with passed in dependency", function() {
+                    then("type constructed with passed in dependency", function () {
                         result.dependency2.should.equal(dependency2Instance);
                     });
                 });
@@ -68,98 +68,105 @@
     });
 
     describe("registration", function () {
-        when("subtype is registered as super type", function () {
-            function superClass() { }
-            function subClass() { }
-            subClass.prototype = new superClass();
-            
-            var registration = builder.register(subClass);
-            var chain = registration.as(superClass);
-            var sut = builder.build();
+        describe("registration for type", function () {
+            var registration = builder.forType(type);
 
-            it("can be chained", function() {
-                chain.should.equal(registration);
-            });
-
-            when("resolving super type", function () {
-                var result = sut.resolve(superClass);
-
-                it("instantiates the sub class", function () {
-                    result.should.be.an.instanceOf(subClass);
-                });
-            });
-        });
-
-        when("type is registered as multiple interfaces", function () {
-            function expectedType() { }
-            function interface1() { }
-            function interface2() { }
-
-            builder.register(expectedType).as([interface1, interface2]);
-            var sut = builder.build();
-
-            when("resolving the first interface", function () {
-                var result = sut.resolve(interface1);
-
-                it("instantiates the implementation", function () {
-                    result.should.be.an.instanceOf(expectedType);
-                });
-            });
-
-            when("resolving the second interface", function () {
-                var result = sut.resolve(interface2);
-
-                it("instantiates the implementation", function () {
-                    result.should.be.an.instanceOf(expectedType);
-                });
-            });
-        });
-
-        when("object instance is registered as type", function () {
-            var obj = {};
-            builder.register(obj).as(type);
-            var sut = builder.build();
-
-            when("type is resolved", function () {
-                var result = sut.resolve(type);
-
-                it("resolves to the object", function () {
-                    result.should.equal(obj);
-                });
-            });
-        });
-
-        when("type is registered as a named dependency", function () {
-            builder.register(type).as('named');
-
-            when("resolving named dependency", function () {
-                var sut = builder.build();
-                var result = sut.resolve('named');
-
-                it("resolves to instance of the registered type", function () {
-                    result.should.be.an.instanceOf(type);
-                });
-            });
-
-            when("another type is registered with a different name", function () {
-                function type2() { }
-
-                builder.register(type2).as('different');
+            when("subtype created for type", function () {
+                function subType() { }
+                subType.prototype = new type();
+                var chain = registration.create(subType);
                 var sut = builder.build();
 
-                when("resolving first name", function () {
+                it("can be chained", function () {
+                    chain.should.equal(registration);
+                });
+
+                when("resolving type", function () {
+                    var result = sut.resolve(type);
+
+                    it("instantiates the sub type", function () {
+                        result.should.be.an.instanceOf(subType);
+                    });
+                });
+            });
+
+            when("value used for type", function () {
+                var value = {};
+                var chain = registration.use(value);
+                var sut = builder.build();
+
+                it("can be chained", function () {
+                    chain.should.equal(registration);
+                });
+
+                when("type is resolved", function () {
+                    var result = sut.resolve(type);
+
+                    it("resolves to the object", function () {
+                        result.should.equal(value);
+                    });
+                });
+            });
+
+            when("factory method called for type", function () {
+                var expectedResult = new type();
+                var factory = sinon.stub().returns(expectedResult);
+                var chain = registration.call(factory);
+                var sut = builder.build();
+
+                it("can be chained", function () {
+                    chain.should.equal(registration);
+                });
+
+                when("type is resolved", function () {
+                    var result = sut.resolve(type);
+
+                    then("container is passed in to factory", function () {
+                        factory.firstCall.args[0].should.be.an.instanceOf(Injection.Container);
+                    });
+
+                    then("resolves to factory return value", function () {
+                        result.should.equal(expectedResult);
+                    });
+                });
+            });
+        });
+
+        describe("registration for key", function () {
+            var registration = builder.forKey('named');
+
+            when("type created for key", function () {
+                registration.create(type);
+
+                when("resolving named dependency", function () {
+                    var sut = builder.build();
                     var result = sut.resolve('named');
 
-                    it("resolves to instance of the first type", function () {
+                    it("resolves to instance of the registered type", function () {
                         result.should.be.an.instanceOf(type);
                     });
                 });
 
-                when("resolving the second name", function () {
-                    var result = sut.resolve('different');
+                when("another type is registered with a different name", function () {
+                    function type2() { }
 
-                    it("resolves to instance of the second type", function () {
-                        result.should.be.an.instanceOf(type2);
+                    builder.forKey('different').create(type2);
+                    var sut = builder.build();
+
+                    when("resolving first name", function () {
+                        var result = sut.resolve('named');
+
+                        it("resolves to instance of the first type", function () {
+                            result.should.be.an.instanceOf(type);
+                        });
+                    });
+
+                    when("resolving the second name", function () {
+                        var result = sut.resolve('different');
+
+                        it("resolves to instance of the second type", function () {
+                            result.should.be.an.instanceOf(type2);
+                        });
                     });
                 });
             });
@@ -168,8 +175,8 @@
         when("type is registered with parameter registration", function () {
             var dependency1Instance = new dependency1();
             var parameterResolver = sinon.stub().returns(dependency1Instance);
-            builder.register(typeWithDependencies)
-                .withParameter(
+            builder.forType(typeWithDependencies)
+                .useParameterHook(
                     function (p) { return p.type == dependency1; },
                     parameterResolver);
             var sut = builder.build();
@@ -179,8 +186,8 @@
 
                 then("parameter resolver called with container & parameter", function () {
                     var args = parameterResolver.firstCall.args;
-                    args[0].should.be.an.instanceOf(Inject.Container);
-                    args[1].should.deep.equal(new Inject.Parameter(dependency1, 'd1', 0));
+                    args[0].should.be.an.instanceOf(Injection.Container);
+                    args[1].should.deep.equal(new Injection.Parameter(dependency1, 'd1', 0));
                 });
 
                 then("parameter is resolved to parameter factory result", function () {
@@ -190,29 +197,8 @@
             });
         });
 
-        when("factory method is registered as type", function () {
-            var expectedResult = new type();
-            var factory = sinon.stub().returns(expectedResult);
-            builder
-                .registerFactory(factory)
-                .as(type);
-            var sut = builder.build();
-
-            when("type is resolved", function () {
-                var result = sut.resolve(type);
-
-                then("container is passed in to factory", function () {
-                    factory.firstCall.args[0].should.be.an.instanceOf(Inject.Container);
-                });
-
-                then("resolves to factory return value", function () {
-                    result.should.equal(expectedResult);
-                });
-            });
-        });
-
         when("factory method returns undefined", function () {
-            builder.registerFactory(function () { }).as([type, 'name']);
+            builder.forType(type).call(function () { });
             var sut = builder.build();
 
             then("resolving type throws", function () {
@@ -220,28 +206,109 @@
                     sut.resolve(type);
                 }, 'Type resolved to undefined');
             });
+        });
 
-            then("resolving name throws", function () {
-                should.throw(function () {
-                    sut.resolve('name');
-                }, "'name' resolved to undefined");
+        when("registering a constructor", function () {
+            var registration = builder.create(type);
+            var sut = builder.build();
+
+            then("registration is returned", function() {
+                registration.should.be.an.instanceOf(Injection.Registration);
+            });
+
+            when("type is resolved", function() {
+                var result = sut.resolve(type);
+
+                then("type resolves to instance of type", function () {
+                    result.should.be.an.instanceOf(type);
+                });
+            });
+        });
+
+        when("registering constructor as a singleton", function () {
+            var registration = builder.createSingle(type);
+            var sut = builder.build();
+
+            then("registration is returned", function() {
+                registration.should.be.an.instanceOf(Injection.Registration);
+            });
+
+            when("resolving type twice", function () {
+                var result1 = sut.resolve(type);
+                var result2 = sut.resolve(type);
+
+                then("type resolves to the same instance", function () {
+                    result1.should.equal(result2);
+                });
+            });
+        });
+
+        when("registering a factory method", function () {
+            var expectedResult = new type();
+            var registration = builder.call(function () { return expectedResult; });
+            
+            then("registration is returned", function () {
+                registration.should.be.an.instanceOf(Injection.Registration);
+            });
+
+            when("registration is set up for type", function() {
+                var chain = registration.for(type);
+                var sut = builder.build();
+
+                it("can be chained", function () {
+                    chain.should.equal(registration);
+                });
+
+                when("type is resolved", function() {
+                    var result = sut.resolve(type);
+
+                    then("type resolves to factory return value", function() {
+                        result.should.equal(expectedResult);
+                    });
+                });
+            });
+        });
+
+        when("registering a value", function() {
+            var value = {};
+            var registration = builder.use(value);
+
+            then("registration is returned", function () {
+                registration.should.be.an.instanceOf(Injection.Registration);
+            });
+
+            when("registration is set up for key", function() {
+                var chain = registration.for('key');
+                var sut = builder.build();
+                
+                it("can be chained", function () {
+                    chain.should.equal(registration);
+                });
+
+                when("key is resolved", function() {
+                    var result = sut.resolve('key');
+
+                    then("key resolves to value", function() {
+                        result.should.equal(value);
+                    });
+                });
             });
         });
     });
 
-    when("sub-containers", function () {
+    describe("sub-containers", function () {
         when("building a sub-container", function () {
             var registration = sinon.spy();
             var sut = builder.build();
             sut.buildSubContainer(registration);
 
-            then("registration callback is called with a Builder", function() {
-                registration.firstCall.args[0].should.be.an.instanceOf(Inject.Builder);
+            then("registration callback is called with a Builder", function () {
+                registration.firstCall.args[0].should.be.an.instanceOf(Injection.Builder);
             });
         });
 
         when("type is registered in original container", function () {
-            builder.register(type).as('foo');
+            builder.forKey('foo').create(type);
             var outer = builder.build();
             var inner = outer.buildSubContainer();
 
@@ -253,7 +320,7 @@
         when("type is registered in sub-container", function () {
             var outer = builder.build();
             var inner = outer.buildSubContainer(function (innerBuilder) {
-                innerBuilder.register(type).as('foo');
+                innerBuilder.forKey('foo').create(type);
             });
 
             then("type can't be resolved from outer container", function () {
@@ -298,7 +365,7 @@
             function disposableType() {
                 this.dispose = this.disposeMethod = sinon.spy();
             }
-            builder.register(disposableType);
+            builder.forType(disposableType);
             var sut = builder.build();
 
             when("resolved twice", function () {
@@ -332,12 +399,12 @@
             });
         });
 
-        when("registered with single instance lifetime", function () {
-            var registration = builder.register(type);
-            var chain = registration.singleInstance();
+        when("registered as singleton", function () {
+            var registration = builder.forType(type);
+            var chain = registration.once();
             var outer = builder.build();
 
-            it("can be chained", function() {
+            it("can be chained", function () {
                 chain.should.equal(registration);
             });
 
@@ -362,8 +429,8 @@
         });
 
         when("registered with instance per container lifetime", function () {
-            var registration = builder.register(type);
-            var chain = registration.instancePerContainer();
+            var registration = builder.forType(type);
+            var chain = registration.perContainer();
             var outer = builder.build();
 
             it("can be chained", function () {

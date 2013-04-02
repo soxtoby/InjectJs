@@ -13,60 +13,93 @@
             return new Container(this._registrations);
         },
 
-        register: function (type) {
+        forType: function (type) {
+            return this._createRegistration().create(type);
+        },
+
+        forKey: function (key) {
+            return this._createRegistration().for(key);
+        },
+
+        create: function (type) {
+            return this.forType(type);
+        },
+
+        createSingle: function (type) {
+            return this._createRegistration().createSingle(type);
+        },
+
+        call: function (factory) {
+            return this._createRegistration().call(factory);
+        },
+
+        use: function (value) {
+            return this._createRegistration().use(value);
+        },
+
+        _createRegistration: function () {
             if (this._containerBuilt)
                 throw new Error('Cannot register anything else once the container has been built');
 
-            var factory = typeof type == 'function'
-                ? constructorFactory(type)
-                : valueFactory(type);
-            var registration = this.registerFactory(factory);
-            registration.as(type);
-            return registration;
-        },
-
-        registerFactory: function (factory) {
-            var registration = new Registration(factory);
+            var registration = new Registration();
             this._registrations.push(registration);
             return registration;
         }
     };
 
-    function Registration(factory) {
-        this.factory = factory;
-        this.registeredAs = [];
+    function Registration() {
         this.parameterHooks = [];
         this._id = uid++;
     }
 
     Registration.prototype = {
-        as: function (interfaces) {
-            this.registeredAs = this.registeredAs.concat(interfaces);
+        for: function (type) {
+            this.registeredAs = type;
             return this;
         },
 
-        singleInstance: function () {
-            var instanceFactory = this.factory;
+        create: function (type) {
+            if (!this.registeredAs)
+                this.for(type);
+            return this.call(constructorFactory(type));
+        },
+
+        use: function (value) {
+            return this.call(valueFactory(value));
+        },
+
+        call: function (factory) {
+            this.factory = this._instanceFactory = factory;
+            return this;
+        },
+
+        once: function () {
+            var instanceFactory = this._instanceFactory;
             var instance;
-            this.factory = function (container) {
+            return this.call(function (container) {
                 return instance
                     || (instance = instanceFactory(container));
-            };
-            return this;
+            });
         },
 
-        instancePerContainer: function () {
-            var instanceFactory = this.factory;
-            this.factory = function (container) {
+        createSingle: function (type) {
+            return this.create(type).once();
+        },
+
+        perContainer: function () {
+            var instanceFactory = this._instanceFactory;
+            return this.call(function (container) {
                 if (!(this._id in container._containerScopedInstances))
                     container._containerScopedInstances[this._id] = instanceFactory(container);
                 return container._containerScopedInstances[this._id];
-            };
-            return this;
+            });
         },
 
-        withParameter: function (matchParameter, resolveValue) {
-            this.parameterHooks.push(new ParameterHook(matchParameter, resolveValue));
+        useParameterHook: function (matchParameter, resolveValue) {
+            var hook = matchParameter instanceof ParameterHook
+                ? matchParameter
+                : new ParameterHook(matchParameter, resolveValue);
+            this.parameterHooks.push(hook);
             return this;
         }
     };
@@ -83,9 +116,7 @@
         this._registrationScope = [];
 
         registrations.forEach(function (registration) {
-            registration.registeredAs.forEach(function (type) {
-                this._registrations[getOrCreateKey(type)] = registration;
-            }, this);
+            this._registrations[getOrCreateKey(registration.registeredAs)] = registration;
         }, this);
     };
 
@@ -117,7 +148,7 @@
                 throw new Error("Nothing registered as '" + type + "'");
 
             return registration
-               || new Registration(constructorFactory(type));
+               || new Registration(type).create(type);
         },
 
         resolveParameter: function (parameter) {
@@ -201,16 +232,17 @@
     }
 
     function factoryFor(type, params) {
-        return new Registration(function (container) {
-            return function () {
-                var specifiedParams = pairArgsWithParams(arguments);
+        return new Registration()
+            .call(function (container) {
+                return function () {
+                    var specifiedParams = pairArgsWithParams(arguments);
 
-                var typeRegistration = container.getRegistration(type);
-                var parameterisedRegistration = buildParameterisedRegistration(typeRegistration, specifiedParams);
+                    var typeRegistration = container.getRegistration(type);
+                    var parameterisedRegistration = buildParameterisedRegistration(typeRegistration, specifiedParams);
 
-                return container.resolve(parameterisedRegistration);
-            };
-        });
+                    return container.resolve(parameterisedRegistration);
+                };
+            });
 
         function pairArgsWithParams(args) {
             return (params || []).map(function (paramType, i) {
@@ -219,9 +251,14 @@
         }
 
         function buildParameterisedRegistration(typeRegistration, specifiedParams) {
-            var parameterisedRegistration = new Registration(typeRegistration.factory);
-            parameterisedRegistration.parameterHooks = [useSpecifiedParameter()]
-                .concat(typeRegistration.parameterHooks);
+            var parameterisedRegistration = new Registration()
+                .call(typeRegistration.factory)
+                .useParameterHook(useSpecifiedParameter());
+            
+            typeRegistration.parameterHooks.forEach(function(hook) {
+                parameterisedRegistration.useParameterHook(hook);
+            });
+            
             return parameterisedRegistration;
 
             function useSpecifiedParameter() {
@@ -264,8 +301,9 @@
         }
     }
 
-    global.Inject = {
+    global.Injection = {
         Builder: Builder,
+        Registration: Registration,
         Container: Container,
         Parameter: Parameter,
         ctor: ctor,
