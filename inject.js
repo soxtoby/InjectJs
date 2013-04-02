@@ -6,7 +6,7 @@
 
     function Builder() {
         this._registrations = [];
-        this._defaultLifetime = instancePerDependency;
+        this.useInstancePerContainer();
     };
 
     Builder.prototype = {

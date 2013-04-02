@@ -381,14 +381,44 @@
     });
 
     describe("lifetimes", function () {
-        when("no lifetime specified", function () {
+        when("registered as singleton", function () {
+            var registration = builder.forType(type);
+            var chain = registration.once();
+            var outer = builder.build();
+
+            it("can be chained", function () {
+                chain.should.equal(registration);
+            });
+
+            typeIsResolvedToSingleton(outer);
+        });
+
+        when("registered with instance per container lifetime", function () {
+            var registration = builder.forType(type);
+            var chain = registration.perContainer();
+            var outer = builder.build();
+
+            it("can be chained", function () {
+                chain.should.equal(registration);
+            });
+
+            typeIsResolvedToInstancePerContainer(outer);
+        });
+
+        when("registered with instance per dependency lifetime", function () {
             function disposableType() {
                 this.dispose = this.disposeMethod = sinon.spy();
             }
-            builder.forType(disposableType);
+            var registration = builder.forType(disposableType);
+            var chain = registration.perDependency();
+
             var sut = builder.build();
 
-            when("resolved twice", function () {
+            it("can be chained", function () {
+                chain.should.equal(registration);
+            });
+
+            when("type is resolved twice", function () {
                 var result1 = sut.resolve(disposableType);
                 var result2 = sut.resolve(disposableType);
 
@@ -419,28 +449,9 @@
             });
         });
 
-        when("registered as singleton", function () {
-            var registration = builder.forType(type);
-            var chain = registration.once();
-            var outer = builder.build();
-
-            it("can be chained", function () {
-                chain.should.equal(registration);
-            });
-
-            typeIsResolvedToSingleton(outer);
-        });
-
-        when("registered with instance per container lifetime", function () {
-            var registration = builder.forType(type);
-            var chain = registration.perContainer();
-            var outer = builder.build();
-
-            it("can be chained", function () {
-                chain.should.equal(registration);
-            });
-
-            typeIsResolvedToInstancePerContainer(outer);
+        when("no default lifetime specified", function () {
+            whenNothingIsRegistered(typeIsResolvedToInstancePerContainer);
+            whenTypeIsRegisteredWithDefaultLifetime(typeIsResolvedToInstancePerContainer);
         });
 
         when("default lifetime set to singleton", function () {
