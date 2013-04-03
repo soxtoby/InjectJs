@@ -47,12 +47,12 @@
         useSingleInstances: function () {
             this._defaultLifetime = singleInstance;
         },
-        
-        useInstancePerContainer: function() {
+
+        useInstancePerContainer: function () {
             this._defaultLifetime = instancePerContainer;
         },
-        
-        useInstancePerDependency: function() {
+
+        useInstancePerDependency: function () {
             this._defaultLifetime = instancePerDependency;
         },
 
@@ -105,13 +105,13 @@
             this._lifetime = instancePerContainer;
             return this;
         },
-        
-        perDependency: function() {
+
+        perDependency: function () {
             this._lifetime = instancePerDependency;
             return this;
         },
-        
-        factory: function(container) {
+
+        factory: function (container) {
             return this._lifetime(this._instanceFactory)(container);
         },
 
@@ -125,7 +125,7 @@
     };
 
     function instancePerDependency(instanceFactory) {
-        return function(container) {
+        return function (container) {
             var instance = instanceFactory(container);
             container.registerDisposable(instance);
             return instance;
@@ -158,6 +158,8 @@
         this._singleInstanceScope = new InstanceScope(this);
         this._containerScope = new InstanceScope(this);
         this._registrationScope = [];
+
+        this._registerSelf();
     };
 
     Container.prototype = {
@@ -240,6 +242,11 @@
             });
         },
 
+        _registerSelf: function () {
+            var key = getOrCreateKey(Container);
+            this._registrations[key] = new Registration().for(key).use(this);
+        },
+
         dispose: function () {
             this._disposables.slice().forEach(function (disposable) {
                 disposable.dispose();
@@ -253,13 +260,13 @@
     }
 
     InstanceScope.prototype = {
-        getOrCreate: function(key, instanceFactory, resolveScope) {
+        getOrCreate: function (key, instanceFactory, resolveScope) {
             return key in this._instances
                 ? this._instances[key]
                 : this.add(key, instanceFactory(resolveScope));
         },
-        
-        add: function(key, instance) {
+
+        add: function (key, instance) {
             this._instances[key] = instance;
             this._ownerContainer.registerDisposable(instance);
             return instance;

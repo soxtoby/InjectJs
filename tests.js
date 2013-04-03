@@ -68,6 +68,14 @@
             (function () { sut.resolve('foo'); })
                 .should.throw("Nothing registered as 'foo'");
         });
+
+        when("resolving a container", function () {
+            var result = sut.resolve(Injection.Container);
+
+            then("same container instance is returned", function () {
+                result.should.equal(sut);
+            });
+        });
     });
 
     describe("registration", function () {
@@ -392,7 +400,7 @@
             it("can be chained", function () {
                 chain.should.equal(registration);
             });
-            
+
             when("resolved twice from same container", function () {
                 var result1 = outer.resolve(disposableType);
                 var result2 = outer.resolve(disposableType);
@@ -411,18 +419,18 @@
                     outerResult.should.equal(innerResult);
                 });
 
-                when("inner container is disposed", function() {
+                when("inner container is disposed", function () {
                     inner.dispose();
 
-                    then("resolved object is not disposed", function() {
+                    then("resolved object is not disposed", function () {
                         innerResult.disposeMethod.should.not.have.been.called;
                     });
                 });
 
-                when("outer container is disposed", function() {
+                when("outer container is disposed", function () {
                     outer.dispose();
 
-                    then("resolved object is disposed", function() {
+                    then("resolved object is disposed", function () {
                         innerResult.disposeMethod.should.have.been.called;
                     });
                 });
@@ -437,7 +445,7 @@
             it("can be chained", function () {
                 chain.should.equal(registration);
             });
-            
+
             when("resolved twice from same container", function () {
                 var result1 = outer.resolve(disposableType);
                 var result2 = outer.resolve(disposableType);
@@ -456,19 +464,19 @@
                     result1.should.not.equal(result2);
                 });
 
-                when("inner container is disposed", function() {
+                when("inner container is disposed", function () {
                     inner.dispose();
 
                     then("object resolved from outer container is not disposed", function () {
                         result1.disposeMethod.should.not.have.been.called;
                     });
 
-                    then("object resolved from inner container is disposed", function() {
+                    then("object resolved from inner container is disposed", function () {
                         result2.disposeMethod.should.have.been.called;
                     });
                 });
 
-                when("outer container is disposed", function() {
+                when("outer container is disposed", function () {
                     outer.dispose();
 
                     then("object resolved from outer container is disposed", function () {
