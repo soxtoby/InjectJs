@@ -7,6 +7,9 @@
             this.dependency1 = d1;
             this.dependency2 = d2;
         });
+    function disposableType() {
+        this.dispose = this.disposeMethod = sinon.spy();
+    }
     var builder = new Injection.Builder();
 
     describe("empty container", function () {
@@ -382,33 +385,104 @@
 
     describe("lifetimes", function () {
         when("registered as singleton", function () {
-            var registration = builder.forType(type);
+            var registration = builder.forType(disposableType);
             var chain = registration.once();
             var outer = builder.build();
 
             it("can be chained", function () {
                 chain.should.equal(registration);
             });
+            
+            when("resolved twice from same container", function () {
+                var result1 = outer.resolve(disposableType);
+                var result2 = outer.resolve(disposableType);
 
-            typeIsResolvedToSingleton(outer);
+                then("same instance returned both times", function () {
+                    result1.should.equal(result2);
+                });
+            });
+
+            when("resolved from outer & inner containers", function () {
+                var inner = outer.buildSubContainer();
+                var innerResult = inner.resolve(disposableType);
+                var outerResult = outer.resolve(disposableType);
+
+                then("same instance returned both times", function () {
+                    outerResult.should.equal(innerResult);
+                });
+
+                when("inner container is disposed", function() {
+                    inner.dispose();
+
+                    then("resolved object is not disposed", function() {
+                        innerResult.disposeMethod.should.not.have.been.called;
+                    });
+                });
+
+                when("outer container is disposed", function() {
+                    outer.dispose();
+
+                    then("resolved object is disposed", function() {
+                        innerResult.disposeMethod.should.have.been.called;
+                    });
+                });
+            });
         });
 
         when("registered with instance per container lifetime", function () {
-            var registration = builder.forType(type);
+            var registration = builder.forType(disposableType);
             var chain = registration.perContainer();
             var outer = builder.build();
 
             it("can be chained", function () {
                 chain.should.equal(registration);
             });
+            
+            when("resolved twice from same container", function () {
+                var result1 = outer.resolve(disposableType);
+                var result2 = outer.resolve(disposableType);
 
-            typeIsResolvedToInstancePerContainer(outer);
+                then("same instance returned both times", function () {
+                    result1.should.equal(result2);
+                });
+            });
+
+            when("resolved from outer & inner containers", function () {
+                var inner = outer.buildSubContainer();
+                var result1 = outer.resolve(disposableType);
+                var result2 = inner.resolve(disposableType);
+
+                then("two separate instances are created", function () {
+                    result1.should.not.equal(result2);
+                });
+
+                when("inner container is disposed", function() {
+                    inner.dispose();
+
+                    then("object resolved from outer container is not disposed", function () {
+                        result1.disposeMethod.should.not.have.been.called;
+                    });
+
+                    then("object resolved from inner container is disposed", function() {
+                        result2.disposeMethod.should.have.been.called;
+                    });
+                });
+
+                when("outer container is disposed", function() {
+                    outer.dispose();
+
+                    then("object resolved from outer container is disposed", function () {
+                        result1.disposeMethod.should.have.been.called;
+                    });
+
+                    then("object resolved from inner container is disposed", function () {
+                        result2.disposeMethod.should.have.been.called;
+                    });
+                });
+            });
         });
 
         when("registered with instance per dependency lifetime", function () {
-            function disposableType() {
-                this.dispose = this.disposeMethod = sinon.spy();
-            }
             var registration = builder.forType(disposableType);
             var chain = registration.perDependency();
 
