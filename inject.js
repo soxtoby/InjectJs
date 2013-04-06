@@ -118,6 +118,20 @@
         factory: function (container) {
             return this._lifetime(this._instanceFactory)(container);
         },
+        
+        withArguments: function (parameters) {
+            var args = arguments;
+            for (var i = 0; i < args.length; i++) {
+                (function (index, arg) {    
+                    this.useParameterHook(function (p) {
+                        return p.index == index;
+                    }, function () {
+                        return arg;
+                    });
+                }).bind(this)(i, args[i]);
+            }
+            return this;
+        },
 
         forParameter: function (name) {
             return new ParameterRegistration(this, function (p) {

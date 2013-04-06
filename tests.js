@@ -410,6 +410,25 @@
                 });
             });
         });
+
+        when("registering arguments", function () {
+            var dependency1Instance = new dependency1();
+            var dependency2Instance = new dependency2();
+            var chain = typeRegistration.withArguments(dependency1Instance, dependency2Instance);
+
+            when("type is resolved", function() {
+                var result = builder.build().resolve(typeWithDependencies);
+
+                it("can be chained", function () {
+                    chain.should.equal(typeRegistration);
+                });
+                
+                then("type is resolved with specified values", function () {
+                    result.dependency1.should.equal(dependency1Instance);
+                    result.dependency2.should.equal(dependency2Instance);
+                });
+            });
+        });
     });
 
     describe("sub-containers", function () {
