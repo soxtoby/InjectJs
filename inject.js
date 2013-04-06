@@ -124,6 +124,12 @@
                 return p.name == name;
             });
         },
+        
+        forParameterType: function(type) {
+            return new ParameterRegistration(this, function(p) {
+                return p.type == type;
+            });
+        },
 
         useParameterHook: function (matchParameter, resolveValue) {
             var hook = matchParameter instanceof ParameterHook

@@ -78,7 +78,7 @@
         });
     });
 
-    describe("registration", function () {
+    describe("type registration", function () {
         when("setting up a registration for type", function () {
             var registration = builder.forType(type);
 
@@ -178,96 +178,6 @@
                         it("resolves to instance of the second type", function () {
                             result.should.be.an.instanceOf(type2);
                         });
-                    });
-                });
-            });
-        });
-
-        when("type is registered with parameter hook", function () {
-            var dependency1Instance = new dependency1();
-            var parameterResolver = sinon.stub().returns(dependency1Instance);
-            builder.forType(typeWithDependencies)
-                .useParameterHook(
-                    function (p) { return p.type == dependency1; },
-                    parameterResolver);
-            var sut = builder.build();
-
-            when("type is resolved", function () {
-                var result = sut.resolve(typeWithDependencies);
-
-                then("parameter resolver called with container & parameter", function () {
-                    var args = parameterResolver.firstCall.args;
-                    args[0].should.be.an.instanceOf(Injection.Container);
-                    args[1].should.deep.equal(new Injection.Parameter(dependency1, 'd1', 0));
-                });
-
-                then("parameter is resolved to parameter factory result", function () {
-                    result.dependency1.should.equal(dependency1Instance);
-                    result.dependency2.should.be.an.instanceOf(dependency2);
-                });
-            });
-        });
-
-        when("type is registered with named parameter", function() {
-            var registration = builder.forType(typeWithDependencies);
-            var parameterRegistration = registration.forParameter('d2');
-
-            when("value specified for parameter", function() {
-                var dependency2Instance = new dependency2();
-                var chain = parameterRegistration.use(dependency2Instance);
-                
-                it("can be chained", function () {
-                    chain.should.equal(registration);
-                });
-
-                when("type is resolved", function() {
-                    var result = builder.build().resolve(typeWithDependencies);
-
-                    then("type is resolved with specified value", function() {
-                        result.dependency2.should.equal(dependency2Instance);
-                    });
-                });
-            });
-
-            when("subtype specified for parameter", function() {
-                function dependency2SubType() { }
-                dependency2SubType.prototype = new dependency2();
-                var chain = parameterRegistration.create(dependency2SubType);
-
-                it("can be chained", function () {
-                    chain.should.equal(registration);
-                });
-
-                when("type is resolved", function() {
-                    var result = builder.build().resolve(typeWithDependencies);
-
-                    then("type is resolved with instance of subtype", function() {
-                        result.dependency2.should.be.an.instanceOf(dependency2SubType);
-                    });
-                });
-            });
-
-            when("factory method specified for parameter", function() {
-                var dependency2Instance = new dependency2();
-                var factoryMethod = sinon.stub().returns(dependency2Instance);
-                var chain = parameterRegistration.call(factoryMethod);
-                
-                it("can be chained", function () {
-                    chain.should.equal(registration);
-                });
-
-                when("type is resolved", function () {
-                    var sut = builder.build();
-                    var result = sut.resolve(typeWithDependencies);
-
-                    then("factory method called with container & parameter", function() {
-                        var args = factoryMethod.firstCall.args;
-                        args[0].should.equal(sut);
-                        args[1].should.deep.equal(new Injection.Parameter(dependency2, 'd2', 1));
-                    });
-
-                    then("type is resolved to factory method's return value", function () {
-                        result.dependency2.should.equal(dependency2Instance);
                     });
                 });
             });
@@ -386,6 +296,116 @@
 
                     then("key resolves to value", function () {
                         result.should.equal(value);
+                    });
+                });
+            });
+        });
+    });
+
+    describe("parameter registration", function() {
+        var typeRegistration = builder.forType(typeWithDependencies);
+
+        when("type is registered with parameter hook", function () {
+            var dependency1Instance = new dependency1();
+            var parameterResolver = sinon.stub().returns(dependency1Instance);
+            typeRegistration
+                .useParameterHook(
+                    function (p) { return p.type == dependency1; },
+                    parameterResolver);
+            var sut = builder.build();
+
+            when("type is resolved", function () {
+                var result = sut.resolve(typeWithDependencies);
+
+                then("parameter resolver called with container & parameter", function () {
+                    var args = parameterResolver.firstCall.args;
+                    args[0].should.be.an.instanceOf(Injection.Container);
+                    args[1].should.deep.equal(new Injection.Parameter(dependency1, 'd1', 0));
+                });
+
+                then("parameter is resolved to parameter factory result", function () {
+                    result.dependency1.should.equal(dependency1Instance);
+                    result.dependency2.should.be.an.instanceOf(dependency2);
+                });
+            });
+        });
+
+        when("registering a named parameter", function () {
+            var parameterRegistration = typeRegistration.forParameter('d2');
+
+            when("value specified for parameter", function () {
+                var dependency2Instance = new dependency2();
+                var chain = parameterRegistration.use(dependency2Instance);
+
+                it("can be chained", function () {
+                    chain.should.equal(typeRegistration);
+                });
+
+                when("type is resolved", function () {
+                    var result = builder.build().resolve(typeWithDependencies);
+
+                    then("type is resolved with specified value", function () {
+                        result.dependency2.should.equal(dependency2Instance);
+                    });
+                });
+            });
+
+            when("subtype specified for parameter", function () {
+                function dependency2SubType() { }
+                dependency2SubType.prototype = new dependency2();
+                var chain = parameterRegistration.create(dependency2SubType);
+
+                it("can be chained", function () {
+                    chain.should.equal(typeRegistration);
+                });
+
+                when("type is resolved", function () {
+                    var result = builder.build().resolve(typeWithDependencies);
+
+                    then("type is resolved with instance of subtype", function () {
+                        result.dependency2.should.be.an.instanceOf(dependency2SubType);
+                    });
+                });
+            });
+
+            when("factory method specified for parameter", function () {
+                var dependency2Instance = new dependency2();
+                var factoryMethod = sinon.stub().returns(dependency2Instance);
+                var chain = parameterRegistration.call(factoryMethod);
+
+                it("can be chained", function () {
+                    chain.should.equal(typeRegistration);
+                });
+
+                when("type is resolved", function () {
+                    var sut = builder.build();
+                    var result = sut.resolve(typeWithDependencies);
+
+                    then("factory method called with container & parameter", function () {
+                        var args = factoryMethod.firstCall.args;
+                        args[0].should.equal(sut);
+                        args[1].should.deep.equal(new Injection.Parameter(dependency2, 'd2', 1));
+                    });
+
+                    then("type is resolved to factory method's return value", function () {
+                        result.dependency2.should.equal(dependency2Instance);
+                    });
+                });
+            });
+        });
+
+        when("registering a typed parameter", function () {
+            var parameterRegistration = typeRegistration.forParameterType(dependency2);
+
+            when("value specified for parameter", function() {
+                var dependency2Instance = new dependency2();
+                parameterRegistration.use(dependency2Instance);
+
+                when("type is resolved", function() {
+                    var result = builder.build().resolve(typeWithDependencies);
+
+                    then("type is resolved with specified value", function() {
+                        result.dependency2.should.equal(dependency2Instance);
                     });
                 });
             });
