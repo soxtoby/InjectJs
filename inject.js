@@ -119,7 +119,7 @@
             return this._lifetime(this._instanceFactory)(container);
         },
         
-        withArguments: function (parameters) {
+        withArguments: function () {
             var args = arguments;
             for (var i = 0; i < args.length; i++) {
                 (function (index, arg) {    
@@ -130,6 +130,13 @@
                     });
                 }).bind(this)(i, args[i]);
             }
+            return this;
+        },
+        
+        withParameters: function(parameters) {
+            Object.keys(parameters).forEach(function (name) {
+                this.forParameter(name).use(parameters[name]);
+            }, this);
             return this;
         },
 

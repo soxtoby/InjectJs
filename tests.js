@@ -416,15 +416,34 @@
             var dependency2Instance = new dependency2();
             var chain = typeRegistration.withArguments(dependency1Instance, dependency2Instance);
 
+            it("can be chained", function () {
+                chain.should.equal(typeRegistration);
+            });
+
             when("type is resolved", function() {
                 var result = builder.build().resolve(typeWithDependencies);
-
-                it("can be chained", function () {
-                    chain.should.equal(typeRegistration);
-                });
                 
                 then("type is resolved with specified values", function () {
                     result.dependency1.should.equal(dependency1Instance);
+                    result.dependency2.should.equal(dependency2Instance);
+                });
+            });
+        });
+
+        when("registering parameters by name", function () {
+            var dependency2Instance = new dependency2();
+            var chain = typeRegistration.withParameters({
+                d2: dependency2Instance
+            });
+
+            it("can be chained", function () {
+                chain.should.equal(typeRegistration);
+            });
+
+            when("type is resolved", function() {
+                var result = builder.build().resolve(typeWithDependencies);
+
+                then("type is resolved with specified values", function() {
                     result.dependency2.should.equal(dependency2Instance);
                 });
             });
