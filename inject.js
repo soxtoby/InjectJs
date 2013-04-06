@@ -25,7 +25,7 @@
         },
 
         forKey: function (key) {
-            return this._createRegistration().for(key);
+            return this._createRegistration().forKey(key);
         },
 
         create: function (type) {
@@ -72,14 +72,18 @@
     }
 
     Registration.prototype = {
-        for: function (type) {
-            this.registeredAs = type;
+        forType: function(type) {
+            return this.forKey(type);
+        },
+
+        forKey: function (key) {
+            this.registeredAs = key;
             return this;
         },
 
         create: function (type) {
             if (!this.registeredAs)
-                this.for(type);
+                this.forType(type);
             return this.call(constructorFactory(type));
         },
 
@@ -244,7 +248,7 @@
 
         _registerSelf: function () {
             var key = getOrCreateKey(Container);
-            this._registrations[key] = new Registration().for(key).use(this);
+            this._registrations[key] = new Registration().forKey(key).use(this);
         },
 
         dispose: function () {

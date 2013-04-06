@@ -283,7 +283,7 @@
             });
 
             when("registration is set up for type", function () {
-                var chain = registration.for(type);
+                var chain = registration.forType(type);
                 var sut = builder.build();
 
                 it("can be chained", function () {
@@ -309,7 +309,7 @@
             });
 
             when("registration is set up for key", function () {
-                var chain = registration.for('key');
+                var chain = registration.forKey('key');
                 var sut = builder.build();
 
                 it("can be chained", function () {
