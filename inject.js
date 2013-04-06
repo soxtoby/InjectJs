@@ -72,7 +72,7 @@
     }
 
     Registration.prototype = {
-        forType: function(type) {
+        forType: function (type) {
             return this.forKey(type);
         },
 
@@ -119,6 +119,12 @@
             return this._lifetime(this._instanceFactory)(container);
         },
 
+        forParameter: function (name) {
+            return new ParameterRegistration(this, function (p) {
+                return p.name == name;
+            });
+        },
+
         useParameterHook: function (matchParameter, resolveValue) {
             var hook = matchParameter instanceof ParameterHook
                 ? matchParameter
@@ -149,6 +155,25 @@
             return container._containerScope.getOrCreate(key, instanceFactory, container);
         };
     }
+
+    function ParameterRegistration(typeRegistration, matchParameter) {
+        this._typeRegistration = typeRegistration;
+        this._matchParameter = matchParameter;
+    }
+
+    ParameterRegistration.prototype = {
+        use: function (value) {
+            return this.call(function () { return value; });
+        },
+
+        create: function (type) {
+            return this.call(function (c) { return c.resolve(type); });
+        },
+        
+        call: function(factory) {
+            return this._typeRegistration.useParameterHook(this._matchParameter, factory);
+        }
+    };
 
     function ParameterHook(matchParameter, resolveValue) {
         this.matches = matchParameter;
