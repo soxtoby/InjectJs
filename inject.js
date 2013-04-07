@@ -83,6 +83,9 @@
 
             this.name = type.name;
             this.registeredAs = type;
+
+            this._ensureTyping();
+
             return this;
         },
 
@@ -107,9 +110,12 @@
         create: function (type) {
             if (!this.registeredAs)
                 this.forType(type);
-            
+
             if (typeof type != 'function')
                 throw new Error('Type is not a function');
+
+            this._resolvesTo = type;
+            this._ensureTyping();
 
             return this.call(constructorFactory(type));
         },
@@ -117,6 +123,9 @@
         use: function (value) {
             if (value == null)
                 throw new Error('Value is null or undefined');
+
+            this._resolvesTo = value;
+            this._ensureTyping();
 
             return this.call(valueFactory(value));
         },
@@ -184,7 +193,7 @@
 
             return new ParameterRegistration(this, function (p) {
                 return p.type == type;
-            });
+            }, type);
         },
 
         useParameterHook: function (matchParameter, resolveValue) {
@@ -193,6 +202,10 @@
                 : new ParameterHook(matchParameter, resolveValue);
             this.parameterHooks.push(hook);
             return this;
+        },
+
+        _ensureTyping: function () {
+            ensureTyping(this.registeredAs, this._resolvesTo);
         },
 
         factory: function (container) {
@@ -222,9 +235,10 @@
         };
     }
 
-    function ParameterRegistration(typeRegistration, matchParameter) {
+    function ParameterRegistration(typeRegistration, matchParameter, parameterType) {
         this._typeRegistration = typeRegistration;
         this._matchParameter = matchParameter;
+        this._parameterType = parameterType;
     }
 
     ParameterRegistration.prototype = {
@@ -232,12 +246,16 @@
             if (typeof type != 'function')
                 throw new Error('Type is not a function');
 
+            ensureTyping(this._parameterType, type);
+
             return this.calling(function (c) { return c.resolve(type); });
         },
-        
+
         using: function (value) {
             if (value == null)
                 throw new Error('Value is null or undefined');
+
+            ensureTyping(this._parameterType, value);
 
             return this.calling(function () { return value; });
         },
@@ -253,9 +271,24 @@
     function ParameterHook(matchParameter, resolveValue) {
         if (typeof matchParameter != 'function') throw new Error('Match callback is not a function');
         if (typeof resolveValue != 'function') throw new Error('Resolve callback is not a function');
-        
+
         this.matches = matchParameter;
         this.resolve = resolveValue;
+    }
+
+    function ensureTyping(baseType, subType) {
+        if (typeof baseType != 'function')
+            return;
+
+        var doesNotInherit = ' does not inherit from ' + (baseType.name || 'anonymous base type');
+
+        if (typeof subType == 'function') {
+            if (baseType != subType && !(subType.prototype instanceof baseType))
+                throw new Error((subType.name || 'Anonymous type') + doesNotInherit);
+        } else if (typeof subType == 'object') {
+            if (!(subType instanceof baseType))
+                throw new Error('Value' + doesNotInherit);
+        }
     }
 
     function Container(registrationMap, defaultLifetime) {
@@ -282,6 +315,8 @@
 
             if (resolved == null)
                 throw new Error(registration.name + " resolved to '" + resolved + "'" + this._resolveChain());
+
+            ensureTyping(type, resolved);
 
             return resolved;
         },

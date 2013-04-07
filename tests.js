@@ -91,7 +91,7 @@
             });
 
             when("value used for type", function () {
-                var value = {};
+                var value = new type();
                 var chain = registration.use(value);
                 var sut = builder.build();
 
@@ -858,6 +858,15 @@
             });
         });
 
+        when("resolving to wrong type", function () {
+            builder.forType(type).call(function () { return {}; });
+            var action = function () { builder.build().resolve(type); };
+
+            it("throws", function () {
+                action.should.throw('Value does not inherit from type');
+            });
+        });
+
         when("resolving type whose dependency resolves to undefined", function () {
             builder.forType(dependency1).call(function () { });
             var action = function () { builder.build().resolve(typeWithDependencies); };
@@ -868,7 +877,7 @@
             });
         });
 
-        when("error occurs with multiple resolves in chain", function () {
+        when("resolve error occurs with multiple resolves in chain", function () {
             function one(p) { }
             function two(p) { }
             function three(four) { }
@@ -911,7 +920,7 @@
             });
         });
 
-        when("setting up type registration", function () {
+        when("configuring type registration", function () {
             var registration = builder.forType(type);
 
             when("creating a non-function", function () {
@@ -919,6 +928,22 @@
 
                 it("throws", function () {
                     action.should.throw('Type is not a function');
+                });
+            });
+
+            when("creating an unnamed non-subtype", function () {
+                var action = function () { registration.create(function () { }); };
+
+                it("throws", function () {
+                    action.should.throw('Anonymous type does not inherit from type');
+                });
+            });
+
+            when("creating a named non-subtype", function () {
+                var action = function () { registration.create(function nonSubType() { }); };
+
+                it("throws with non-subtype name in message", function () {
+                    action.should.throw('nonSubType does not inherit from type');
                 });
             });
 
@@ -935,6 +960,14 @@
 
                 it("throws", function () {
                     action.should.throw('Value is null or undefined');
+                });
+            });
+
+            when("using a value of the wrong type", function () {
+                var action = function () { registration.use({}); };
+
+                it("throws", function () {
+                    action.should.throw('Value does not inherit from type');
                 });
             });
 
@@ -979,14 +1012,33 @@
             });
         });
 
-        when("setting up a parameter registration", function () {
-            var registration = builder.forType(typeWithDependencies).withParameterNamed('d1');
+        when("registering non-subtype for unnamed base type", function () {
+            var action = function () {
+                builder.create(function nonSubType() { })
+                    .forType(function () { });
+            };
+
+            it("throws with default name in message", function () {
+                action.should.throw('nonSubType does not inherit from anonymous base type');
+            });
+        });
+
+        when("configuring typed parameter registration", function () {
+            var registration = builder.forType(typeWithDependencies).withParameterTyped(dependency1);
 
             when("creating a non-function type", function () {
                 var action = function () { registration.creating({}); };
 
                 it("throws", function () {
                     action.should.throw('Type is not a function');
+                });
+            });
+
+            when("creating a non-subtype", function () {
+                var action = function () { registration.creating(function () { }); };
+
+                it("throws", function () {
+                    action.should.throw('Anonymous type does not inherit from dependency1');
                 });
             });
 
@@ -1003,6 +1055,14 @@
 
                 it("throws", function () {
                     action.should.throw('Value is null or undefined');
+                });
+            });
+
+            when("using value of wrong type", function () {
+                var action = function () { registration.using({}); };
+
+                it("throws", function () {
+                    action.should.throw('Value does not inherit from dependency1');
                 });
             });
 
