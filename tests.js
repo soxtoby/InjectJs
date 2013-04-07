@@ -302,7 +302,7 @@
         });
     });
 
-    describe("parameter registration", function() {
+    describe("parameter registration", function () {
         var typeRegistration = builder.forType(typeWithDependencies);
 
         when("type is registered with parameter hook", function () {
@@ -331,11 +331,11 @@
         });
 
         when("registering a named parameter", function () {
-            var parameterRegistration = typeRegistration.forParameter('d2');
+            var parameterRegistration = typeRegistration.withParameterNamed('d2');
 
             when("value specified for parameter", function () {
                 var dependency2Instance = new dependency2();
-                var chain = parameterRegistration.use(dependency2Instance);
+                var chain = parameterRegistration.using(dependency2Instance);
 
                 it("can be chained", function () {
                     chain.should.equal(typeRegistration);
@@ -353,7 +353,7 @@
             when("subtype specified for parameter", function () {
                 function dependency2SubType() { }
                 dependency2SubType.prototype = new dependency2();
-                var chain = parameterRegistration.create(dependency2SubType);
+                var chain = parameterRegistration.creating(dependency2SubType);
 
                 it("can be chained", function () {
                     chain.should.equal(typeRegistration);
@@ -371,7 +371,7 @@
             when("factory method specified for parameter", function () {
                 var dependency2Instance = new dependency2();
                 var factoryMethod = sinon.stub().returns(dependency2Instance);
-                var chain = parameterRegistration.call(factoryMethod);
+                var chain = parameterRegistration.calling(factoryMethod);
 
                 it("can be chained", function () {
                     chain.should.equal(typeRegistration);
@@ -395,16 +395,16 @@
         });
 
         when("registering a typed parameter", function () {
-            var parameterRegistration = typeRegistration.forParameterType(dependency2);
+            var parameterRegistration = typeRegistration.withParameterTyped(dependency2);
 
-            when("value specified for parameter", function() {
+            when("value specified for parameter", function () {
                 var dependency2Instance = new dependency2();
-                parameterRegistration.use(dependency2Instance);
+                parameterRegistration.using(dependency2Instance);
 
-                when("type is resolved", function() {
+                when("type is resolved", function () {
                     var result = builder.build().resolve(typeWithDependencies);
 
-                    then("type is resolved with specified value", function() {
+                    then("type is resolved with specified value", function () {
                         result.dependency2.should.equal(dependency2Instance);
                     });
                 });
@@ -420,9 +420,9 @@
                 chain.should.equal(typeRegistration);
             });
 
-            when("type is resolved", function() {
+            when("type is resolved", function () {
                 var result = builder.build().resolve(typeWithDependencies);
-                
+
                 then("type is resolved with specified values", function () {
                     result.dependency1.should.equal(dependency1Instance);
                     result.dependency2.should.equal(dependency2Instance);
@@ -440,10 +440,10 @@
                 chain.should.equal(typeRegistration);
             });
 
-            when("type is resolved", function() {
+            when("type is resolved", function () {
                 var result = builder.build().resolve(typeWithDependencies);
 
-                then("type is resolved with specified values", function() {
+                then("type is resolved with specified values", function () {
                     result.dependency2.should.equal(dependency2Instance);
                 });
             });

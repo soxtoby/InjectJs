@@ -118,11 +118,11 @@
         factory: function (container) {
             return this._lifetime(this._instanceFactory)(container);
         },
-        
+
         withArguments: function () {
             var args = arguments;
             for (var i = 0; i < args.length; i++) {
-                (function (index, arg) {    
+                (function (index, arg) {
                     this.useParameterHook(function (p) {
                         return p.index == index;
                     }, function () {
@@ -132,22 +132,22 @@
             }
             return this;
         },
-        
-        withParameters: function(parameters) {
+
+        withParameters: function (parameters) {
             Object.keys(parameters).forEach(function (name) {
-                this.forParameter(name).use(parameters[name]);
+                this.withParameterNamed(name).using(parameters[name]);
             }, this);
             return this;
         },
 
-        forParameter: function (name) {
+        withParameterNamed: function (name) {
             return new ParameterRegistration(this, function (p) {
                 return p.name == name;
             });
         },
-        
-        forParameterType: function(type) {
-            return new ParameterRegistration(this, function(p) {
+
+        withParameterTyped: function (type) {
+            return new ParameterRegistration(this, function (p) {
                 return p.type == type;
             });
         },
@@ -189,15 +189,15 @@
     }
 
     ParameterRegistration.prototype = {
-        use: function (value) {
-            return this.call(function () { return value; });
+        using: function (value) {
+            return this.calling(function () { return value; });
         },
 
-        create: function (type) {
-            return this.call(function (c) { return c.resolve(type); });
+        creating: function (type) {
+            return this.calling(function (c) { return c.resolve(type); });
         },
-        
-        call: function(factory) {
+
+        calling: function (factory) {
             return this._typeRegistration.useParameterHook(this._matchParameter, factory);
         }
     };
