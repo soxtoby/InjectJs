@@ -78,15 +78,28 @@
 
     Registration.prototype = {
         forType: function (type) {
-            return this.forKey(type);
+            if (typeof type != 'function')
+                throw new Error('Registration type is not a function');
+
+            this.name = type.name;
+            this.registeredAs = type;
+            return this;
         },
 
         forKey: function (key) {
+            if (typeof key != 'string')
+                throw new Error('Registration key is not a string');
+
+            this.name = "'" + key + "'";
             this.registeredAs = key;
             return this;
         },
 
         forParameter: function (name) {
+            if (typeof name != 'string')
+                throw new Error('Parameter name is not a string');
+
+            this.name = "param: '" + name + "'";
             this.registeredAs = paramKey(name);
             return this;
         },
@@ -94,14 +107,24 @@
         create: function (type) {
             if (!this.registeredAs)
                 this.forType(type);
+            
+            if (typeof type != 'function')
+                throw new Error('Type is not a function');
+
             return this.call(constructorFactory(type));
         },
 
         use: function (value) {
+            if (value == null)
+                throw new Error('Value is null or undefined');
+
             return this.call(valueFactory(value));
         },
 
         call: function (factory) {
+            if (typeof factory != 'function')
+                throw new Error('Factory is not a function');
+
             this._instanceFactory = factory;
             return this;
         },
@@ -123,10 +146,6 @@
         perDependency: function () {
             this._lifetime = instancePerDependency;
             return this;
-        },
-
-        factory: function (container) {
-            return this._lifetime(this._instanceFactory)(container);
         },
 
         withArguments: function () {
@@ -151,12 +170,18 @@
         },
 
         withParameterNamed: function (name) {
+            if (typeof name != 'string')
+                throw new Error('Parameter name is not a string');
+
             return new ParameterRegistration(this, function (p) {
                 return p.name == name;
             });
         },
 
         withParameterTyped: function (type) {
+            if (typeof type != 'function')
+                throw new Error('Parameter type is not a function');
+
             return new ParameterRegistration(this, function (p) {
                 return p.type == type;
             });
@@ -168,6 +193,10 @@
                 : new ParameterHook(matchParameter, resolveValue);
             this.parameterHooks.push(hook);
             return this;
+        },
+
+        factory: function (container) {
+            return this._lifetime(this._instanceFactory)(container);
         }
     };
 
@@ -199,20 +228,32 @@
     }
 
     ParameterRegistration.prototype = {
+        creating: function (type) {
+            if (typeof type != 'function')
+                throw new Error('Type is not a function');
+
+            return this.calling(function (c) { return c.resolve(type); });
+        },
+        
         using: function (value) {
+            if (value == null)
+                throw new Error('Value is null or undefined');
+
             return this.calling(function () { return value; });
         },
 
-        creating: function (type) {
-            return this.calling(function (c) { return c.resolve(type); });
-        },
-
         calling: function (factory) {
+            if (typeof factory != 'function')
+                throw new Error('Factory is not a function');
+
             return this._typeRegistration.useParameterHook(this._matchParameter, factory);
         }
     };
 
     function ParameterHook(matchParameter, resolveValue) {
+        if (typeof matchParameter != 'function') throw new Error('Match callback is not a function');
+        if (typeof resolveValue != 'function') throw new Error('Resolve callback is not a function');
+        
         this.matches = matchParameter;
         this.resolve = resolveValue;
     }
@@ -230,6 +271,9 @@
 
     Container.prototype = {
         resolve: function (type) {
+            if (type == null)
+                throw new Error("Tried to resolve '" + type + "'");
+
             var registration = this.getRegistration(type);
 
             this._registrationScope.push(registration);
@@ -237,9 +281,7 @@
             this._registrationScope.pop();
 
             if (resolved == null)
-                throw new Error(
-                    (typeof type == 'function' ? "Type" : "'" + type + "'")
-                    + ' resolved to ' + resolved);
+                throw new Error(registration.name + " resolved to '" + resolved + "'" + this._resolveChain());
 
             return resolved;
         },
@@ -255,11 +297,21 @@
             return registration
                || new Registration(this._defaultLifetime).create(type);
         },
-        
+
         _resolveFailedMessage: function (type) {
-            return typeof type == "string" && type.indexOf(parameterMarker) == 0
+            var error = typeof type == "string" && type.indexOf(parameterMarker) == 0
                 ? "Failed to resolve parameter named '" + type.substring(parameterMarker.length) + "'"
-                : "Nothing registered as '" + type + "'";
+                : "Failed to resolve key '" + type + "'";
+            return error + this._resolveChain();
+        },
+
+        _resolveChain: function () {
+            return this._registrationScope.length
+                ? " while attempting to resolve "
+                    + this._registrationScope
+                        .map(function (r) { return r.name; })
+                        .join(' -> ')
+                : '';
         },
 
         resolveParameter: function (parameter) {
@@ -318,7 +370,7 @@
 
         _registerSelf: function () {
             var key = getOrCreateKey(Container);
-            this._registrations[key] = new Registration().forKey(key).use(this);
+            this._registrations[key] = new Registration().forType(Container).use(this);
         },
 
         dispose: function () {
@@ -354,7 +406,7 @@
                 .split(',')
                 .map(function (p) { return p.trim(); })
                 .filter(function (p) { return !!p; });
-        
+
         var parameters = paramNames.map(function (p, i) {
             return new Parameter(dependencies[i], p, i);
         });
@@ -438,7 +490,7 @@
     function paramKey(name) {
         return parameterMarker + name;
     }
-    
+
     function ctor(dependencies, constructor) {
         constructor.dependencies = dependencies;
         return constructor;

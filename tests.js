@@ -2,11 +2,11 @@
     function type() { }
     function dependency1() { }
     function dependency2() { }
-    var typeWithDependencies = Injection.ctor([dependency1, dependency2],
-        function (d1, d2) {
-            this.dependency1 = d1;
-            this.dependency2 = d2;
-        });
+    function typeWithDependencies(d1, d2) {
+        this.dependency1 = d1;
+        this.dependency2 = d2;
+    }
+    typeWithDependencies.dependencies = [dependency1, dependency2];
     function disposableType() {
         this.dispose = this.disposeMethod = sinon.spy();
     }
@@ -14,12 +14,6 @@
 
     describe("empty container", function () {
         var sut = builder.build();
-
-        then("attempting to register another type with builder throws error", function () {
-            should.throw(function () {
-                builder.forType(function () { });
-            }, 'Cannot register anything else once the container has been built');
-        });
 
         when("resolving existing class", function () {
             function unregisteredClass() { };
@@ -62,16 +56,6 @@
                     });
                 });
             });
-        });
-
-        then("resolving an unregistered name throws", function () {
-            (function () { sut.resolve('foo'); })
-                .should.throw("Nothing registered as 'foo'");
-        });
-
-        then("resolving an unregistered parameter throws", function () {
-            (function () { sut.resolveParameter(new Injection.Parameter(undefined, 'paramName', 0)); })
-                .should.throw("Failed to resolve parameter named 'paramName'");
         });
 
         when("resolving a container", function () {
@@ -227,17 +211,6 @@
                         parameterResolver.firstCall.args[1].name.should.equal('specifiedName');
                     });
                 });
-            });
-        });
-
-        when("factory method returns undefined", function () {
-            builder.forType(type).call(function () { });
-            var sut = builder.build();
-
-            then("resolving type throws", function () {
-                should.throw(function () {
-                    sut.resolve(type);
-                }, 'Type resolved to undefined');
             });
         });
 
@@ -505,7 +478,8 @@
             });
 
             then("type can't be resolved from outer container", function () {
-                should.throw(function () { outer.resolve('foo'); });
+                (function () { outer.resolve('foo'); })
+                    .should.throw();
             });
 
             then("type can be resolved from inner container", function () {
@@ -798,5 +772,247 @@
                 });
             });
         }
+    });
+
+    describe("errors", function () {
+        when("container built with nothing registered", function () {
+            var sut = builder.build();
+
+            when("registering another type", function () {
+                var action = (function () { builder.forType(function () { }); });
+
+                it("throws with appropriate message", function () {
+                    action.should.throw('Cannot register anything else once the container has been built');
+                });
+            });
+
+            when("resolving an unregistered name", function () {
+                var action = (function () { sut.resolve('foo'); });
+
+                it("throws with name in message", function () {
+                    action.should.throw("Failed to resolve key 'foo'");
+                });
+            });
+
+            when("resolving type with an unregistered named dependency", function () {
+                function typeWithNamedDependency(d1) { }
+                typeWithNamedDependency.dependencies = ['unregistered'];
+                var action = function () { sut.resolve(typeWithNamedDependency); };
+
+                it("throws with resolve chain in messsage", function () {
+                    action.should.throw("Failed to resolve key 'unregistered'"
+                        + " while attempting to resolve typeWithNamedDependency");
+                });
+            });
+
+            then("resolving an unregistered parameter throws", function () {
+                var action = (function () { sut.resolveParameter(new Injection.Parameter(undefined, 'paramName', 0)); });
+
+                it("throws with parameter name in message", function () {
+                    action.should.throw("Failed to resolve parameter named 'paramName'");
+                });
+            });
+
+            then("resolving type with unregistered parameter throws", function () {
+                function typeWithParameter(param) { }
+                var action = function () { sut.resolve(typeWithParameter); };
+
+                it("throws with resolve chain in message", function () {
+                    action.should.throw("Failed to resolve parameter named 'param'"
+                        + " while attempting to resolve typeWithParameter");
+                });
+            });
+
+            when("resolving null", function () {
+                var action = function () { sut.resolve(null); };
+
+                it("throws with null in message", function () {
+                    action.should.throw("Tried to resolve 'null'");
+                });
+            });
+
+            then("resolving undefined", function () {
+                var action = function () { sut.resolve(); };
+
+                it("throws with undefined in message", function () {
+                    action.should.throw("Tried to resolve 'undefined'");
+                });
+            });
+        });
+
+        when("resolving to undefined", function () {
+            builder.forType(type).call(function () { });
+            var action = function () { builder.build().resolve(type); };
+
+            it("throws with undefined in message", function () {
+                action.should.throw("type resolved to 'undefined'");
+            });
+        });
+
+        when("resolving to null", function () {
+            builder.forType(type).call(function () { return null; });
+            var action = function () { builder.build().resolve(type); };
+
+            it("throws with null in message", function () {
+                action.should.throw("type resolved to 'null'");
+            });
+        });
+
+        when("resolving type whose dependency resolves to undefined", function () {
+            builder.forType(dependency1).call(function () { });
+            var action = function () { builder.build().resolve(typeWithDependencies); };
+
+            it("throws with resolve chain in message", function () {
+                action.should.throw("dependency1 resolved to 'undefined'"
+                    + " while attempting to resolve typeWithDependencies");
+            });
+        });
+
+        when("error occurs with multiple resolves in chain", function () {
+            function one(p) { }
+            function two(p) { }
+            function three(four) { }
+            function four(five) { }
+            one.dependencies = [two];
+            two.dependencies = ['three'];
+
+            builder.create(three).forKey('three');
+            builder.create(four).forParameter('four');
+
+            var action = function () { builder.build().resolve(one); };
+
+            it("throws with each dependency in chain", function () {
+                action.should.throw("Failed to resolve parameter named 'five'"
+                    + " while attempting to resolve one -> two -> 'three' -> param: 'four'");
+            });
+        });
+
+        when("registering as non-function type", function () {
+            var action = function () { builder.forType({}); };
+
+            it("throws", function () {
+                action.should.throw('Registration type is not a function');
+            });
+        });
+
+        when("registering as non-string key", function () {
+            var action = function () { builder.forKey({}); };
+
+            it("throws", function () {
+                action.should.throw('Registration key is not a string');
+            });
+        });
+
+        when("registering as non-string parameter", function () {
+            var action = function () { builder.forParameter({}); };
+
+            it("throws", function () {
+                action.should.throw('Parameter name is not a string');
+            });
+        });
+
+        when("setting up type registration", function () {
+            var registration = builder.forType(type);
+
+            when("creating a non-function", function () {
+                var action = function () { registration.create('type'); };
+
+                it("throws", function () {
+                    action.should.throw('Type is not a function');
+                });
+            });
+
+            when("using a null value", function () {
+                var action = function () { registration.use(null); };
+
+                it("throws", function () {
+                    action.should.throw('Value is null or undefined');
+                });
+            });
+
+            when("using an undefined value", function () {
+                var action = function () { registration.use(); };
+
+                it("throws", function () {
+                    action.should.throw('Value is null or undefined');
+                });
+            });
+
+            when("calling a non-function", function () {
+                var action = function () { registration.call({}); };
+
+                it("throws", function () {
+                    action.should.throw('Factory is not a function');
+                });
+            });
+
+            when("registering parameter with non-string name", function () {
+                var action = function () { registration.withParameterNamed({}); };
+
+                it("throws", function () {
+                    action.should.throw('Parameter name is not a string');
+                });
+            });
+
+            when("registering parameter with non-function type", function () {
+                var action = function () { registration.withParameterTyped({}); };
+
+                it("throws", function () {
+                    action.should.throw('Parameter type is not a function');
+                });
+            });
+
+            when("using parameter hook with non-function matcher", function () {
+                var action = function () { registration.useParameterHook({}, function () { }); };
+
+                it("throws", function () {
+                    action.should.throw('Match callback is not a function');
+                });
+            });
+
+            when("using parameter hook with non-function resolve", function () {
+                var action = function () { registration.useParameterHook(function () { }, {}); };
+
+                it("throws", function () {
+                    action.should.throw('Resolve callback is not a function');
+                });
+            });
+        });
+
+        when("setting up a parameter registration", function () {
+            var registration = builder.forType(typeWithDependencies).withParameterNamed('d1');
+
+            when("creating a non-function type", function () {
+                var action = function () { registration.creating({}); };
+
+                it("throws", function () {
+                    action.should.throw('Type is not a function');
+                });
+            });
+
+            when("using a null value", function () {
+                var action = function () { registration.using(null); };
+
+                it("throws", function () {
+                    action.should.throw('Value is null or undefined');
+                });
+            });
+
+            when("using an undefined value", function () {
+                var action = function () { registration.using(); };
+
+                it("throws", function () {
+                    action.should.throw('Value is null or undefined');
+                });
+            });
+
+            when("calling a non-function", function () {
+                var action = function () { registration.calling({}); };
+
+                it("throws", function () {
+                    action.should.throw('Factory is not a function');
+                });
+            });
+        });
     });
 });
