@@ -69,6 +69,11 @@
                 .should.throw("Nothing registered as 'foo'");
         });
 
+        then("resolving an unregistered parameter throws", function () {
+            (function () { sut.resolveParameter(new Injection.Parameter(undefined, 'paramName', 0)); })
+                .should.throw("Failed to resolve parameter named 'paramName'");
+        });
+
         when("resolving a container", function () {
             var result = sut.resolve(Injection.Container);
 
@@ -79,7 +84,7 @@
     });
 
     describe("type registration", function () {
-        when("setting up a registration for type", function () {
+        when("setting up a registration for a type", function () {
             var registration = builder.forType(type);
 
             when("subtype created for type", function () {
@@ -143,15 +148,14 @@
             });
         });
 
-        when("setting up a registration for key", function () {
+        when("setting up a registration for a key", function () {
             var registration = builder.forKey('named');
 
             when("type created for key", function () {
                 registration.create(type);
 
                 when("resolving named dependency", function () {
-                    var sut = builder.build();
-                    var result = sut.resolve('named');
+                    var result = builder.build().resolve('named');
 
                     it("resolves to instance of the registered type", function () {
                         result.should.be.an.instanceOf(type);
@@ -178,6 +182,29 @@
                         it("resolves to instance of the second type", function () {
                             result.should.be.an.instanceOf(type2);
                         });
+                    });
+                });
+            });
+        });
+
+        when("setting up a registration for a parameter name", function () {
+            var registration = builder.forParameter('param');
+
+            when("type created for parameter", function () {
+                registration.create(type);
+
+                when("resolving type with registered parameter name", function () {
+                    function typeWithParameter(param) {
+                        this.arg = param;
+                    }
+                    var result = builder.build().resolve(typeWithParameter);
+
+                    it("resolves to instance of resolved type", function () {
+                        result.should.be.an.instanceOf(typeWithParameter);
+                    });
+
+                    it("creates resolved type with instance of registered parameter type", function () {
+                        result.arg.should.be.an.instanceOf(type);
                     });
                 });
             });

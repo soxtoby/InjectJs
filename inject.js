@@ -2,6 +2,7 @@
     'use strict';
 
     var uid = 1;
+    var parameterMarker = 'param:';
 
     function Builder() {
         this._registrations = [];
@@ -26,6 +27,10 @@
 
         forKey: function (key) {
             return this._createRegistration().forKey(key);
+        },
+
+        forParameter: function (name) {
+            return this._createRegistration().forParameter(name);
         },
 
         create: function (type) {
@@ -78,6 +83,11 @@
 
         forKey: function (key) {
             this.registeredAs = key;
+            return this;
+        },
+
+        forParameter: function (name) {
+            this.registeredAs = paramKey(name);
             return this;
         },
 
@@ -240,10 +250,16 @@
                 : this._registrations[getKey(type)];
 
             if (!registration && !(typeof type == 'function'))
-                throw new Error("Nothing registered as '" + type + "'");
+                throw new Error(this._resolveFailedMessage(type));
 
             return registration
                || new Registration(this._defaultLifetime).create(type);
+        },
+        
+        _resolveFailedMessage: function (type) {
+            return typeof type == "string" && type.indexOf(parameterMarker) == 0
+                ? "Failed to resolve parameter named '" + type.substring(parameterMarker.length) + "'"
+                : "Nothing registered as '" + type + "'";
         },
 
         resolveParameter: function (parameter) {
@@ -256,7 +272,9 @@
                         return parameterHooks[i].resolve(this, parameter);
             }
 
-            return this.resolve(parameter.type);
+            return parameter.type
+                ? this.resolve(parameter.type)
+                : this.resolve(paramKey(parameter.name));
         },
 
         buildSubContainer: function (registration) {
@@ -333,9 +351,12 @@
         var dependencies = constructor.dependencies || [];
         var paramNames = constructor.parameters
             || /\((.*?)\)/.exec(constructor.toString())[1]
-                .split(',').map(function (p) { return p.trim(); });
-        var parameters = dependencies.map(function (d, i) {
-            return new Parameter(d, paramNames[i], i);
+                .split(',')
+                .map(function (p) { return p.trim(); })
+                .filter(function (p) { return !!p; });
+        
+        var parameters = paramNames.map(function (p, i) {
+            return new Parameter(dependencies[i], p, i);
         });
 
         return function (container) {
@@ -414,6 +435,10 @@
             : type.$injectId;
     }
 
+    function paramKey(name) {
+        return parameterMarker + name;
+    }
+    
     function ctor(dependencies, constructor) {
         constructor.dependencies = dependencies;
         return constructor;
