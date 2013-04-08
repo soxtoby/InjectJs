@@ -30,7 +30,7 @@
 
             it("resolves to instance of type with nothing passed in", function () {
                 result.should.be.an.instanceOf(typeWithParameter);
-                should.not.exist(result.arg);
+                expect(result.arg).to.be.undefined;
             });
         });
 
@@ -64,6 +64,36 @@
                     then("type constructed with passed in dependency", function () {
                         result.dependency2.should.equal(dependency2Instance);
                     });
+                });
+            });
+        });
+
+        when("resolving optional dependency", function () {
+            when("with no default value", function () {
+                var result = sut.resolve(Injection.optional(type));
+
+                it("resolves to null", function () {
+                    expect(result).to.equal(null);
+                });
+            });
+
+            when("with a default value", function () {
+                var expectedValue = {};
+                var result = sut.resolve(Injection.optional(type, expectedValue));
+
+                it("resolves to default value", function () {
+                    result.should.equal(expectedValue);
+                });
+            });
+
+            when("dependency has been registered", function () {
+                sut = sut.buildSubContainer(function (b) {
+                    b.create(type);
+                });
+                var result = sut.resolve(Injection.optional(type));
+
+                it("resolves dependency", function () {
+                    result.should.be.an.instanceOf(type);
                 });
             });
         });

@@ -3,6 +3,7 @@
 
     var uid = 1;
     var parameterMarker = 'param:';
+    var undefined;
 
     function Builder() {
         this._registrations = [];
@@ -121,7 +122,7 @@
         },
 
         use: function (value) {
-            if (typeof value == 'undefined')
+            if (value === undefined)
                 throw new Error('Value is undefined');
 
             this._resolvesTo = value;
@@ -252,7 +253,7 @@
         },
 
         using: function (value) {
-            if (typeof value == 'undefined')
+            if (value === undefined)
                 throw new Error('Value is undefined');
 
             ensureTyping(this._parameterType, value);
@@ -313,7 +314,7 @@
             var resolved = registration.factory(this);
             this._registrationScope.pop();
 
-            if (typeof resolved == 'undefined')
+            if (resolved === undefined)
                 throw new Error("Failed to resolve " + registration.name + this._resolveChain());
 
             ensureTyping(type, resolved);
@@ -356,7 +357,7 @@
                 return this.resolve(parameter.type);
 
             var key = paramKey(parameter.name);
-            if (key in this._registrations)
+            if (this.isRegistered(key))
                 return this.resolve(key);
         },
 
@@ -372,13 +373,17 @@
             subContainer._singleInstanceScope = this._singleInstanceScope;
 
             Object.keys(this._registrations).forEach(function (key) {
-                if (!(key in subContainer._registrations))
+                if (!subContainer.isRegistered(key))
                     subContainer._registrations[key] = this._registrations[key];
             }, this);
 
             this.registerDisposable(subContainer);
 
             return subContainer;
+        },
+        
+        isRegistered: function (type) {
+            return getKey(type) in this._registrations;
         },
 
         registerDisposable: function (instance) {
@@ -505,6 +510,17 @@
         }
     }
 
+    function optional(type, defaultValue) {
+        if (defaultValue === undefined)
+            defaultValue = null;
+        return new Registration()
+            .call(function (container) {
+                return container.isRegistered(type)
+                    ? container.resolve(type)
+                    : defaultValue;
+            });
+    }
+
     function getOrCreateKey(type) {
         var key = getKey(type);
         return key
@@ -541,6 +557,7 @@
         Container: Container,
         Parameter: Parameter,
         ctor: ctor,
-        factoryFor: factoryFor
+        factoryFor: factoryFor,
+        optional: optional
     };
 })(window);
