@@ -121,8 +121,8 @@
         },
 
         use: function (value) {
-            if (value == null)
-                throw new Error('Value is null or undefined');
+            if (typeof value == 'undefined')
+                throw new Error('Value is undefined');
 
             this._resolvesTo = value;
             this._ensureTyping();
@@ -252,8 +252,8 @@
         },
 
         using: function (value) {
-            if (value == null)
-                throw new Error('Value is null or undefined');
+            if (typeof value == 'undefined')
+                throw new Error('Value is undefined');
 
             ensureTyping(this._parameterType, value);
 
@@ -277,7 +277,7 @@
     }
 
     function ensureTyping(baseType, subType) {
-        if (typeof baseType != 'function')
+        if (typeof baseType != 'function' || subType === null)
             return;
 
         var doesNotInherit = ' does not inherit from ' + (baseType.name || 'anonymous base type');
@@ -313,8 +313,8 @@
             var resolved = registration.factory(this);
             this._registrationScope.pop();
 
-            if (resolved == null)
-                throw new Error(registration.name + " resolved to '" + resolved + "'" + this._resolveChain());
+            if (typeof resolved == 'undefined')
+                throw new Error("Failed to resolve " + registration.name + this._resolveChain());
 
             ensureTyping(type, resolved);
 

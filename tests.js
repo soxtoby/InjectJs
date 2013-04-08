@@ -250,7 +250,7 @@
         });
 
         when("registering a factory method", function () {
-            var expectedResult = new type();
+            var expectedResult;
             var registration = builder.call(function () { return expectedResult; });
 
             then("registration is returned", function () {
@@ -265,11 +265,21 @@
                     chain.should.equal(registration);
                 });
 
-                when("type is resolved", function () {
+                when("factory returns type instance & type is resolved", function () {
+                    expectedResult = new type();
                     var result = sut.resolve(type);
 
                     then("type resolves to factory return value", function () {
                         result.should.equal(expectedResult);
+                    });
+                });
+
+                when("factory returns null & type is resolved", function () {
+                    expectedResult = null;
+                    var result = sut.resolve(type);
+
+                    then("type resolves to null", function () {
+                        should.equal(result, null);
                     });
                 });
             });
@@ -297,6 +307,18 @@
                     then("key resolves to value", function () {
                         result.should.equal(value);
                     });
+                });
+            });
+        });
+
+        when("registering a null value for a type", function () {
+            builder.use(null).forType(type);
+
+            when("type is resolved", function () {
+                var result = builder.build().resolve(type);
+
+                it("resolves type to null", function () {
+                    should.equal(result, null);
                 });
             });
         });
@@ -346,6 +368,18 @@
 
                     then("type is resolved with specified value", function () {
                         result.dependency2.should.equal(dependency2Instance);
+                    });
+                });
+            });
+
+            when("null value specified for parameter", function () {
+                parameterRegistration.using(null);
+
+                when("type is resolved", function () {
+                    var result = builder.build().resolve(typeWithDependencies);
+
+                    then("type is resolved with null value", function () {
+                        should.equal(result.dependency2, null);
                     });
                 });
             });
@@ -845,16 +879,7 @@
             var action = function () { builder.build().resolve(type); };
 
             it("throws with undefined in message", function () {
-                action.should.throw("type resolved to 'undefined'");
-            });
-        });
-
-        when("resolving to null", function () {
-            builder.forType(type).call(function () { return null; });
-            var action = function () { builder.build().resolve(type); };
-
-            it("throws with null in message", function () {
-                action.should.throw("type resolved to 'null'");
+                action.should.throw("Failed to resolve type");
             });
         });
 
@@ -872,7 +897,7 @@
             var action = function () { builder.build().resolve(typeWithDependencies); };
 
             it("throws with resolve chain in message", function () {
-                action.should.throw("dependency1 resolved to 'undefined'"
+                action.should.throw("Failed to resolve dependency1"
                     + " while attempting to resolve typeWithDependencies");
             });
         });
@@ -947,19 +972,11 @@
                 });
             });
 
-            when("using a null value", function () {
-                var action = function () { registration.use(null); };
-
-                it("throws", function () {
-                    action.should.throw('Value is null or undefined');
-                });
-            });
-
             when("using an undefined value", function () {
                 var action = function () { registration.use(); };
 
                 it("throws", function () {
-                    action.should.throw('Value is null or undefined');
+                    action.should.throw('Value is undefined');
                 });
             });
 
@@ -1042,19 +1059,11 @@
                 });
             });
 
-            when("using a null value", function () {
-                var action = function () { registration.using(null); };
-
-                it("throws", function () {
-                    action.should.throw('Value is null or undefined');
-                });
-            });
-
             when("using an undefined value", function () {
                 var action = function () { registration.using(); };
 
                 it("throws", function () {
-                    action.should.throw('Value is null or undefined');
+                    action.should.throw('Value is undefined');
                 });
             });
 
