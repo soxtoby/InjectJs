@@ -362,6 +362,22 @@
                 });
             });
         });
+
+        when("registering a post-build function", function () {
+            var callback = sinon.spy(function (o) {
+                o.callbackProperty = true;
+            });
+            builder.create(type).then(callback);
+            var sut = builder.build();
+
+            when("type is resolved", function () {
+                var result = sut.resolve(type);
+
+                then("callback is called with resolved value and container", function () {
+                    callback.should.have.been.calledWith(result, sut);
+                });
+            });
+        });
     });
 
     describe("parameter registration", function () {

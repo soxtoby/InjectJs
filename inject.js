@@ -204,13 +204,27 @@
             this.parameterHooks.push(hook);
             return this;
         },
+        
+        then: function (callback) {
+            this._postBuild = function (instanceFactory) {
+                return function (container) {
+                    var value = instanceFactory(container);
+                    callback(value, container);
+                    return value;
+                };
+            };
+        },
+        
+        _postBuild: function (instanceFactory) {
+            return instanceFactory;
+        },
 
         _ensureTyping: function () {
             ensureTyping(this.registeredAs, this._resolvesTo);
         },
 
         factory: function (container) {
-            return this._lifetime(this._instanceFactory)(container);
+            return this._lifetime(this._postBuild(this._instanceFactory))(container);
         }
     };
 
