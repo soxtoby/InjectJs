@@ -24,6 +24,16 @@
             });
         });
 
+        when("resolving existing class with parameter but no specified dependencies", function () {
+            function typeWithParameter(param) { this.arg = param; }
+            var result = sut.resolve(typeWithParameter);
+
+            it("resolves to instance of type with nothing passed in", function () {
+                result.should.be.an.instanceOf(typeWithParameter);
+                should.not.exist(result.arg);
+            });
+        });
+
         when("type has multiple dependencies", function () {
             when("resolving type", function () {
                 var result = sut.resolve(typeWithDependencies);
@@ -839,24 +849,6 @@
                 });
             });
 
-            then("resolving an unregistered parameter throws", function () {
-                var action = (function () { sut.resolveParameter(new Injection.Parameter(undefined, 'paramName', 0)); });
-
-                it("throws with parameter name in message", function () {
-                    action.should.throw("Failed to resolve parameter named 'paramName'");
-                });
-            });
-
-            then("resolving type with unregistered parameter throws", function () {
-                function typeWithParameter(param) { }
-                var action = function () { sut.resolve(typeWithParameter); };
-
-                it("throws with resolve chain in message", function () {
-                    action.should.throw("Failed to resolve parameter named 'param'"
-                        + " while attempting to resolve typeWithParameter");
-                });
-            });
-
             when("resolving null", function () {
                 var action = function () { sut.resolve(null); };
 
@@ -912,11 +904,12 @@
 
             builder.create(three).forKey('three');
             builder.create(four).forParameter('four');
+            builder.call(function () { }).forParameter('five');
 
             var action = function () { builder.build().resolve(one); };
 
             it("throws with each dependency in chain", function () {
-                action.should.throw("Failed to resolve parameter named 'five'"
+                action.should.throw("Failed to resolve param: 'five'"
                     + " while attempting to resolve one -> two -> 'three' -> param: 'four'");
             });
         });

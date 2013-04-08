@@ -326,18 +326,11 @@
                 ? type
                 : this._registrations[getKey(type)];
 
-            if (!registration && !(typeof type == 'function'))
-                throw new Error(this._resolveFailedMessage(type));
+            if (!registration && typeof type == 'string')
+                throw new Error("Failed to resolve key '" + type + "'" + this._resolveChain());
 
             return registration
                || new Registration(this._defaultLifetime).create(type);
-        },
-
-        _resolveFailedMessage: function (type) {
-            var error = typeof type == "string" && type.indexOf(parameterMarker) == 0
-                ? "Failed to resolve parameter named '" + type.substring(parameterMarker.length) + "'"
-                : "Failed to resolve key '" + type + "'";
-            return error + this._resolveChain();
         },
 
         _resolveChain: function () {
@@ -359,9 +352,12 @@
                         return parameterHooks[i].resolve(this, parameter);
             }
 
-            return parameter.type
-                ? this.resolve(parameter.type)
-                : this.resolve(paramKey(parameter.name));
+            if (parameter.type)
+                return this.resolve(parameter.type);
+
+            var key = paramKey(parameter.name);
+            if (key in this._registrations)
+                return this.resolve(key);
         },
 
         buildSubContainer: function (registration) {
