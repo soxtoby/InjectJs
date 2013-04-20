@@ -231,6 +231,24 @@
                         result.arg.should.be.an.instanceOf(type);
                     });
                 });
+
+                when("resolving type with registered parameter name on new line", function () {
+                    // It's important that this function's parameter name is on a different line
+                    // to the '(', to test the function parameter parsing
+                    function typeWithParameter(
+                                param) {
+                        this.arg = param;
+                    }
+                    var result = builder.build().resolve(typeWithParameter);
+
+                    it("resolves to instance of resolved type", function () {
+                        result.should.be.an.instanceOf(typeWithParameter);
+                    });
+
+                    it("creates resolved type with instance of registered parameter type", function () {
+                        result.arg.should.be.an.instanceOf(type);
+                    });
+                });
             });
         });
 

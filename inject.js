@@ -452,7 +452,7 @@
     function constructorFactory(constructor) {
         var dependencies = constructor.dependencies || [];
         var paramNames = constructor.parameters
-            || /\((.*?)\)/.exec(constructor.toString())[1]
+            || /\(([^\)]*)\)/.exec(constructor.toString())[1]
                 .split(',')
                 .map(function (p) { return p.trim(); })
                 .filter(function (p) { return !!p; });
