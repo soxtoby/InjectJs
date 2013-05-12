@@ -1140,5 +1140,35 @@
                 });
             });
         });
+
+        when("specifying undefined dependency for named function", function () {
+            var action = specifyUndefinedDependency(function UndefinedDependencyType(u) { });
+
+            it("throws", function () {
+                action.should.throw('UndefinedDependencyType has an undefined dependency');
+            });
+        });
+
+        when("specifying undefined dependency for unnamed function", function () {
+            var action = specifyUndefinedDependency(function (u) { });
+
+            it("throws", function () {
+                action.should.throw('Type has an undefined dependency');
+            });
+        });
+
+        function specifyUndefinedDependency(constructor) {
+            return function () { Injection.ctor([undefined], constructor); };
+        }
+
+        when("specifying wrong number of dependencies", function () {
+            var action = function () {
+                Injection.ctor(['foo', 'bar'], function (baz) { });
+            };
+
+            it("throws", function () {
+                action.should.throw('Type has 2 dependencies, but 1 parameter(s)');
+            });
+        });
     });
 });

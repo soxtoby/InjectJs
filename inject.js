@@ -204,7 +204,7 @@
             this.parameterHooks.push(hook);
             return this;
         },
-        
+
         then: function (callback) {
             this._postBuild = function (instanceFactory) {
                 return function (container) {
@@ -214,7 +214,7 @@
                 };
             };
         },
-        
+
         _postBuild: function (instanceFactory) {
             return instanceFactory;
         },
@@ -395,7 +395,7 @@
 
             return subContainer;
         },
-        
+
         isRegistered: function (type) {
             return getKey(type) in this._registrations;
         },
@@ -553,6 +553,12 @@
     }
 
     function ctor(dependencies, constructor) {
+        if (dependencies.some(function (d) { return !d; }))
+            throw new Error((constructor.name || 'Type') + ' has an undefined dependency');
+
+        if (dependencies.length != constructor.length)
+            throw new Error((constructor.name || 'Type') + ' has ' + dependencies.length + ' dependencies, but ' + constructor.length + ' parameter(s)');
+
         constructor.dependencies = dependencies;
         return constructor;
     }
