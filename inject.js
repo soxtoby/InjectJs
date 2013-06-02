@@ -128,6 +128,8 @@
             this._resolvesTo = value;
             this._ensureTyping();
 
+            this._lifetime = unmanagedLifetime;
+
             return this.call(valueFactory(value));
         },
 
@@ -247,6 +249,12 @@
         var key = getOrCreateKey(this.registeredAs);
         return function (container) {
             return container._containerScope.getOrCreate(key, instanceFactory, container);
+        };
+    }
+
+    function unmanagedLifetime(instanceFactory) {
+        return function (container) {
+            return instanceFactory(container);
         };
     }
 

@@ -10,6 +10,7 @@
     function disposableType() {
         this.dispose = this.disposeMethod = sinon.spy();
     }
+    disposableType.prototype = new type();
     var builder = new Injection.Builder();
 
     describe("empty container", function () {
@@ -131,7 +132,7 @@
             });
 
             when("value used for type", function () {
-                var value = new type();
+                var value = new disposableType();
                 var chain = registration.use(value);
                 var sut = builder.build();
 
@@ -144,6 +145,14 @@
 
                     it("resolves to the object", function () {
                         result.should.equal(value);
+                    });
+
+                    when("container is disposed", function () {
+                        sut.dispose();
+
+                        then("value is not disposed", function () {
+                            value.disposeMethod.should.not.have.been.called;
+                        });
                     });
                 });
             });
