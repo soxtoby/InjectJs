@@ -542,6 +542,15 @@
                     : defaultValue;
             });
     }
+    
+    function named(type, key) {
+        return new Registration()
+            .call(function (container) {
+                var instance = container.resolve(key);
+                ensureTyping(type, instance);
+                return instance;
+            });
+    }
 
     function getOrCreateKey(type) {
         var key = getKey(type);
@@ -586,6 +595,7 @@
         Parameter: Parameter,
         ctor: ctor,
         factoryFor: factoryFor,
-        optional: optional
+        optional: optional,
+        named: named
     };
 })(window);

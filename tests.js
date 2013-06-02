@@ -187,8 +187,16 @@
             when("type created for key", function () {
                 registration.create(type);
 
-                when("resolving named dependency", function () {
+                when("resolving key", function () {
                     var result = builder.build().resolve('named');
+
+                    it("resolves to instance of the registered type", function () {
+                        result.should.be.an.instanceOf(type);
+                    });
+                });
+
+                when("resolving named dependency", function () {
+                    var result = builder.build().resolve(Injection.named(type, 'named'));
 
                     it("resolves to instance of the registered type", function () {
                         result.should.be.an.instanceOf(type);
@@ -951,6 +959,15 @@
         when("resolving to wrong type", function () {
             builder.forType(type).call(function () { return {}; });
             var action = function () { builder.build().resolve(type); };
+
+            it("throws", function () {
+                action.should.throw('Value does not inherit from type');
+            });
+        });
+
+        when("resolving named dependency to wrong type", function () {
+            builder.forKey('foo').use({});
+            var action = function () { builder.build().resolve(Injection.named(type, 'foo')); };
 
             it("throws", function () {
                 action.should.throw('Value does not inherit from type');
