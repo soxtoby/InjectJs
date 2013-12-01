@@ -5,7 +5,8 @@
     var parameterMarker = 'param:';
     var undefined;
 
-    function Builder() {
+    function Builder(parentRegistrationMap) {
+        this._parentRegistrationMap = parentRegistrationMap || {};
         this._registrations = [];
         this.useInstancePerContainer();
     };
@@ -14,12 +15,18 @@
         build: function () {
             this._containerBuilt = true;
 
-            var registrationMap = {};
+            var registrationMap = Object.create(this._parentRegistrationMap, {});
             this._registrations.forEach(function (registration) {
                 registrationMap[getOrCreateKey(registration.registeredAs)] = registration;
             });
+            
+            var container = new Container(registrationMap, this._defaultLifetime);
 
-            return new Container(registrationMap, this._defaultLifetime);
+            this._registrations.forEach(function (registration) {
+                registration.provideContainer(container);
+            });
+            
+            return container;
         },
 
         forType: function (type) {
@@ -60,6 +67,10 @@
 
         useInstancePerDependency: function () {
             this._defaultLifetime = instancePerDependency;
+        },
+        
+        setDefaultLifetime: function(lifetime) {
+            this._defaultLifetime = lifetime;
         },
 
         _createRegistration: function () {
@@ -224,6 +235,11 @@
         _ensureTyping: function () {
             ensureTyping(this.registeredAs, this._resolvesTo);
         },
+        
+        provideContainer: function(container) {
+            this._container = container;
+            return this;
+        },
 
         factory: function (container) {
             return this._lifetime(this._postBuild(this._instanceFactory))(container);
@@ -240,8 +256,9 @@
 
     function singleInstance(instanceFactory) {
         var key = getOrCreateKey(this.registeredAs);
+        var instanceContainer = this._container;
         return function (container) {
-            return container._singleInstanceScope.getOrCreate(key, instanceFactory, container);
+            return instanceContainer._containerScope.getOrCreate(key, instanceFactory, instanceContainer);
         };
     }
 
@@ -318,7 +335,6 @@
         this._registrations = registrationMap;
         this._defaultLifetime = defaultLifetime;
         this._disposables = [];
-        this._singleInstanceScope = new InstanceScope(this);
         this._containerScope = new InstanceScope(this);
         this._registrationScope = [];
 
@@ -353,7 +369,7 @@
                 throw new Error("Failed to resolve key '" + type + "'" + this._resolveChain());
 
             return registration
-               || new Registration(this._defaultLifetime).create(type);
+               || new Registration(this._defaultLifetime).create(type).provideContainer(this);
         },
 
         _resolveChain: function () {
@@ -384,20 +400,13 @@
         },
 
         buildSubContainer: function (registration) {
-            var builder = new Builder();
+            var builder = new Builder(this._registrations);
+            builder.setDefaultLifetime(this._defaultLifetime);
 
             if (registration)
                 registration(builder);
 
             var subContainer = builder.build();
-
-            subContainer._defaultLifetime = this._defaultLifetime;
-            subContainer._singleInstanceScope = this._singleInstanceScope;
-
-            Object.keys(this._registrations).forEach(function (key) {
-                if (!subContainer.isRegistered(key))
-                    subContainer._registrations[key] = this._registrations[key];
-            }, this);
 
             this.registerDisposable(subContainer);
 

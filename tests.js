@@ -641,7 +641,7 @@
     });
 
     describe("lifetimes", function () {
-        when("registered as singleton", function () {
+        when("registered as singleton in outer container", function () {
             var registration = builder.forType(disposableType);
             var chain = registration.once();
             var outer = builder.build();
@@ -682,6 +682,64 @@
                     then("resolved object is disposed", function () {
                         innerResult.disposeMethod.should.have.been.called;
                     });
+                });
+            });
+        });
+
+        when("registered as singleton in inner container", function () {
+            builder.create(disposableType).perDependency();
+            var outer = builder.build();
+            var inner = outer.buildSubContainer(function (b) {
+                return b.createSingle(disposableType);
+            });
+
+            when("resolved from outer container twice", function () {
+                var result1 = outer.resolve(disposableType);
+                var result2 = outer.resolve(disposableType);
+
+                then("different instances returned", function () {
+                    return result1.should.not.equal(result2);
+                });
+            });
+
+            when("when resolved from inner container twice", function () {
+                var result1 = inner.resolve(disposableType);
+                var result2 = inner.resolve(disposableType);
+
+                then("same instance returned both times", function () {
+                    return result1.should.equal(result2);
+                });
+            });
+
+            when("resolved from outer & inner containers", function () {
+                var outerResult = outer.resolve(disposableType);
+                var innerResult = inner.resolve(disposableType);
+
+                then("different instances returned", function () {
+                    return innerResult.should.not.equal(outerResult);
+                });
+            });
+        });
+
+        when("type with dependencies registered as singleton", function () {
+            var outerDepdendency1 = new dependency1();
+            var outerDepdendency2 = new dependency2();
+            builder.createSingle(typeWithDependencies);
+            builder.use(outerDepdendency1).forType(dependency1);
+            builder.use(outerDepdendency2).forType(dependency2);
+            var outer = builder.build();
+
+            when("resolved from an inner container", function() {
+                var inner = outer.buildSubContainer(function(b) {
+                    b.use(new dependency1()).forType(dependency1);
+                    b.use(new dependency2()).forType(dependency2);
+                });
+
+                var result = inner.resolve(typeWithDependencies);
+
+                then("dependencies are resolved from outer container", function() {
+                    result.dependency1.should.equal(outerDepdendency1);
+                    result.dependency2.should.equal(outerDepdendency2);
                 });
             });
         });
