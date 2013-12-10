@@ -843,16 +843,6 @@
             whenTypeIsRegisteredWithDefaultLifetime(typeIsResolvedToInstancePerContainer);
         });
 
-        when("default lifetime set to singleton", function () {
-            builder.useSingleInstances();
-
-            whenNothingIsRegistered(typeIsResolvedToSingleton);
-
-            whenTypeIsRegisteredWithDefaultLifetime(typeIsResolvedToSingleton);
-
-            whenTypeIsRegisteredWithInstancePerDependencyLifetime(typeIsResolvedToInstancePerDependency);
-        });
-
         when("default lifetime set to instance per container", function () {
             builder.useInstancePerContainer();
 

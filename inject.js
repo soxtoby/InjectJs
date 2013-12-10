@@ -19,13 +19,13 @@
             this._registrations.forEach(function (registration) {
                 registrationMap[getOrCreateKey(registration.registeredAs)] = registration;
             });
-            
+
             var container = new Container(registrationMap, this._defaultLifetime);
 
             this._registrations.forEach(function (registration) {
                 registration.provideContainer(container);
             });
-            
+
             return container;
         },
 
@@ -57,10 +57,6 @@
             return this._createRegistration().use(value);
         },
 
-        useSingleInstances: function () {
-            this._defaultLifetime = singleInstance;
-        },
-
         useInstancePerContainer: function () {
             this._defaultLifetime = instancePerContainer;
         },
@@ -68,8 +64,8 @@
         useInstancePerDependency: function () {
             this._defaultLifetime = instancePerDependency;
         },
-        
-        setDefaultLifetime: function(lifetime) {
+
+        setDefaultLifetime: function (lifetime) {
             this._defaultLifetime = lifetime;
         },
 
@@ -235,14 +231,14 @@
         _ensureTyping: function () {
             ensureTyping(this.registeredAs, this._resolvesTo);
         },
-        
-        provideContainer: function(container) {
+
+        provideContainer: function (container) {
             this._container = container;
             return this;
         },
 
         factory: function (container) {
-            return this._lifetime(this._postBuild(this._instanceFactory))(container);
+            return this._lifetime(this._postBuild(this._instanceFactory.bind(this)))(container);
         }
     };
 
@@ -381,24 +377,6 @@
                 : '';
         },
 
-        resolveParameter: function (parameter) {
-            var constructorRegistration = this._registrationScope[this._registrationScope.length - 1];
-
-            if (constructorRegistration) {
-                var parameterHooks = constructorRegistration.parameterHooks;
-                for (var i = 0; i < parameterHooks.length; i++)
-                    if (parameterHooks[i].matches(parameter))
-                        return parameterHooks[i].resolve(this, parameter);
-            }
-
-            if (parameter.type)
-                return this.resolve(parameter.type);
-
-            var key = paramKey(parameter.name);
-            if (this.isRegistered(key))
-                return this.resolve(key);
-        },
-
         buildSubContainer: function (registration) {
             var builder = new Builder(this._registrations);
             builder.setDefaultLifetime(this._defaultLifetime);
@@ -479,9 +457,23 @@
         });
 
         return function (container) {
-            var args = parameters.map(container.resolveParameter, container);
+            var args = parameters.map(resolveParameter, this);
             var resolvedConstructor = Function.prototype.bind.apply(constructor, [null].concat(args));
             return new resolvedConstructor();
+
+            function resolveParameter(parameter) {
+                var parameterHooks = this.parameterHooks;
+                for (var i = 0; i < parameterHooks.length; i++)
+                    if (parameterHooks[i].matches(parameter))
+                        return parameterHooks[i].resolve(container, parameter);
+
+                if (parameter.type)
+                    return container.resolve(parameter.type);
+
+                var key = paramKey(parameter.name);
+                if (container.isRegistered(key))
+                    return container.resolve(key);
+            }
         };
     }
 
@@ -517,14 +509,8 @@
         }
 
         function buildParameterisedRegistration(typeRegistration, specifiedParams) {
-            var parameterisedRegistration = new Registration()
-                .call(typeRegistration._instanceFactory)
-                .useParameterHook(useSpecifiedParameter());
-
-            typeRegistration.parameterHooks.forEach(function (hook) {
-                parameterisedRegistration.useParameterHook(hook);
-            });
-
+            var parameterisedRegistration = Object.create(typeRegistration);
+            parameterisedRegistration.parameterHooks = [useSpecifiedParameter()].concat(typeRegistration.parameterHooks);
             return parameterisedRegistration;
 
             function useSpecifiedParameter() {
@@ -551,7 +537,7 @@
                     : defaultValue;
             });
     }
-    
+
     function named(type, key) {
         return new Registration()
             .call(function (container) {
