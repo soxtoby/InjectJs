@@ -11,7 +11,7 @@
         this.dispose = this.disposeMethod = sinon.spy();
     }
     disposableType.prototype = new type();
-    var builder = new Injection.Builder();
+    var builder = new Injection.ContainerBuilder();
 
     describe("empty container", function () {
         var sut = builder.build();
@@ -294,7 +294,7 @@
             var sut = builder.build();
 
             then("registration is returned", function () {
-                registration.should.be.an.instanceOf(Injection.Registration);
+                registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
             });
 
             when("type is resolved", function () {
@@ -311,7 +311,7 @@
             var sut = builder.build();
 
             then("registration is returned", function () {
-                registration.should.be.an.instanceOf(Injection.Registration);
+                registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
             });
 
             when("resolving type twice", function () {
@@ -329,7 +329,7 @@
             var registration = builder.call(function () { return expectedResult; });
 
             then("registration is returned", function () {
-                registration.should.be.an.instanceOf(Injection.Registration);
+                registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
             });
 
             when("registration is set up for type", function () {
@@ -365,7 +365,7 @@
             var registration = builder.use(value);
 
             then("registration is returned", function () {
-                registration.should.be.an.instanceOf(Injection.Registration);
+                registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
             });
 
             when("registration is set up for key", function () {
@@ -581,8 +581,8 @@
             var sut = builder.build();
             sut.buildSubContainer(registration);
 
-            then("registration callback is called with a Builder", function () {
-                registration.firstCall.args[0].should.be.an.instanceOf(Injection.Builder);
+            then("registration callback is called with a ContainerBuilder", function () {
+                registration.firstCall.args[0].should.be.an.instanceOf(Injection.ContainerBuilder);
             });
         });
 

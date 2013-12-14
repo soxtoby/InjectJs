@@ -5,25 +5,22 @@
     var parameterMarker = 'param:';
     var undefined;
 
-    function Builder(parentRegistrationMap) {
+    function ContainerBuilder(parentRegistrationMap) {
         this._parentRegistrationMap = parentRegistrationMap || {};
-        this._registrations = [];
+        this._registrationBuilders = [];
         this.useInstancePerContainer();
     };
 
-    Builder.prototype = {
+    ContainerBuilder.prototype = {
         build: function () {
             this._containerBuilt = true;
 
-            var registrationMap = Object.create(this._parentRegistrationMap, {});
-            this._registrations.forEach(function (registration) {
-                registrationMap[getOrCreateKey(registration.registeredAs)] = registration;
-            });
+            var registrationMap = Object.create(this._parentRegistrationMap);
 
             var container = new Container(registrationMap, this._defaultLifetime);
 
-            this._registrations.forEach(function (registration) {
-                registration.provideContainer(container);
+            this._registrationBuilders.forEach(function (builder) {
+                registrationMap[getOrCreateKey(builder.registeredAs)] = builder.build(container);
             });
 
             return container;
@@ -73,18 +70,18 @@
             if (this._containerBuilt)
                 throw new Error('Cannot register anything else once the container has been built');
 
-            var registration = new Registration(this._defaultLifetime);
-            this._registrations.push(registration);
+            var registration = new RegistrationBuilder(this._defaultLifetime);
+            this._registrationBuilders.push(registration);
             return registration;
         }
     };
 
-    function Registration(lifetime) {
-        this._lifetime = lifetime || instancePerDependency;
-        this.parameterHooks = [];
+    function RegistrationBuilder(buildLifetime) {
+        this._buildLifetime = buildLifetime || instancePerDependency;
+        this._parameterHooks = [];
     }
 
-    Registration.prototype = {
+    RegistrationBuilder.prototype = {
         forType: function (type) {
             if (typeof type != 'function')
                 throw new Error('Registration type is not a function');
@@ -135,7 +132,7 @@
             this._resolvesTo = value;
             this._ensureTyping();
 
-            this._lifetime = unmanagedLifetime;
+            this._buildLifetime = unmanagedLifetime;
 
             return this.call(valueFactory(value));
         },
@@ -149,7 +146,7 @@
         },
 
         once: function () {
-            this._lifetime = singleInstance;
+            this._buildLifetime = singleInstance;
             return this;
         },
 
@@ -158,12 +155,12 @@
         },
 
         perContainer: function () {
-            this._lifetime = instancePerContainer;
+            this._buildLifetime = instancePerContainer;
             return this;
         },
 
         perDependency: function () {
-            this._lifetime = instancePerDependency;
+            this._buildLifetime = instancePerDependency;
             return this;
         },
 
@@ -210,64 +207,67 @@
             var hook = matchParameter instanceof ParameterHook
                 ? matchParameter
                 : new ParameterHook(matchParameter, resolveValue);
-            this.parameterHooks.push(hook);
+            this._parameterHooks.push(hook);
             return this;
         },
 
         then: function (callback) {
-            this._postBuild = function (instanceFactory) {
-                return function (container) {
-                    var value = instanceFactory(container);
-                    callback(value, container);
+            this._buildPostCreate = function (registrationContainer, instanceFactory) {
+                return function (resolvingContainer) {
+                    var value = instanceFactory(resolvingContainer);
+                    callback(value, resolvingContainer);
                     return value;
                 };
             };
         },
 
-        _postBuild: function (instanceFactory) {
+        _buildPostCreate: function (registrationContainer, instanceFactory) {
             return instanceFactory;
         },
 
         _ensureTyping: function () {
             ensureTyping(this.registeredAs, this._resolvesTo);
         },
-
-        provideContainer: function (container) {
-            this._container = container;
-            return this;
-        },
-
-        factory: function (container) {
-            return this._lifetime(this._postBuild(this._instanceFactory.bind(this)))(container);
+        
+        build: function(container) {
+            var lifetime = this._buildLifetime.bind(this, container);
+            var postBuild = this._buildPostCreate.bind(this, container);
+            var factory = lifetime(postBuild(this._instanceFactory));
+            return new Registration(this.name, factory, this._parameterHooks);
         }
     };
+    
+    function Registration(name, factory, parameterHooks) {
+        this.name = name;
+        this.factory = factory;
+        this.parameterHooks = parameterHooks;
+    }
 
-    function instancePerDependency(instanceFactory) {
-        return function (container) {
-            var instance = instanceFactory(container);
-            container.registerDisposable(instance);
+    function instancePerDependency(registrationContainer, instanceFactory) {
+        return function (resolvingContainer) {
+            var instance = instanceFactory.call(this, resolvingContainer);
+            resolvingContainer.registerDisposable(instance);
             return instance;
         };
     }
 
-    function singleInstance(instanceFactory) {
+    function singleInstance(registrationContainer, instanceFactory) {
         var key = getOrCreateKey(this.registeredAs);
-        var instanceContainer = this._container;
-        return function (container) {
-            return instanceContainer._containerScope.getOrCreate(key, instanceFactory, instanceContainer);
+        return function (resolvingContainer) {
+            return registrationContainer._containerScope.getOrCreate(key, instanceFactory.bind(this));
         };
     }
 
-    function instancePerContainer(instanceFactory) {
+    function instancePerContainer(registrationContainer, instanceFactory) {
         var key = getOrCreateKey(this.registeredAs);
-        return function (container) {
-            return container._containerScope.getOrCreate(key, instanceFactory, container);
+        return function (resolvingContainer) {
+            return resolvingContainer._containerScope.getOrCreate(key, instanceFactory.bind(this));
         };
     }
 
-    function unmanagedLifetime(instanceFactory) {
-        return function (container) {
-            return instanceFactory(container);
+    function unmanagedLifetime(registrationContainer, instanceFactory) {
+        return function (resolvingContainer) {
+            return instanceFactory.call(this, resolvingContainer);
         };
     }
 
@@ -365,7 +365,7 @@
                 throw new Error("Failed to resolve key '" + type + "'" + this._resolveChain());
 
             return registration
-               || new Registration(this._defaultLifetime).create(type).provideContainer(this);
+               || new RegistrationBuilder(this._defaultLifetime).create(type).build(this);
         },
 
         _resolveChain: function () {
@@ -378,7 +378,7 @@
         },
 
         buildSubContainer: function (registration) {
-            var builder = new Builder(this._registrations);
+            var builder = new ContainerBuilder(this._registrations);
             builder.setDefaultLifetime(this._defaultLifetime);
 
             if (registration)
@@ -415,7 +415,7 @@
 
         _registerSelf: function () {
             var key = getOrCreateKey(Container);
-            this._registrations[key] = new Registration().forType(Container).use(this);
+            this._registrations[key] = new RegistrationBuilder().forType(Container).use(this).build(this);
         },
 
         dispose: function () {
@@ -431,10 +431,10 @@
     }
 
     InstanceScope.prototype = {
-        getOrCreate: function (key, instanceFactory, resolveScope) {
+        getOrCreate: function (key, instanceFactory) {
             return key in this._instances
                 ? this._instances[key]
-                : this.add(key, instanceFactory(resolveScope));
+                : this.add(key, instanceFactory(this._ownerContainer));
         },
 
         add: function (key, instance) {
@@ -490,7 +490,7 @@
     }
 
     function factoryFor(type, params) {
-        return new Registration()
+        return new RegistrationBuilder()
             .call(function (container) {
                 return function () {
                     var specifiedParams = pairArgsWithParams(arguments);
@@ -500,7 +500,8 @@
 
                     return container.resolve(parameterisedRegistration);
                 };
-            });
+            })
+            .build();
 
         function pairArgsWithParams(args) {
             return (params || []).map(function (paramType, i) {
@@ -530,21 +531,23 @@
     function optional(type, defaultValue) {
         if (defaultValue === undefined)
             defaultValue = null;
-        return new Registration()
+        return new RegistrationBuilder()
             .call(function (container) {
                 return container.isRegistered(type)
                     ? container.resolve(type)
                     : defaultValue;
-            });
+            })
+            .build();
     }
 
     function named(type, key) {
-        return new Registration()
+        return new RegistrationBuilder()
             .call(function (container) {
                 var instance = container.resolve(key);
                 ensureTyping(type, instance);
                 return instance;
-            });
+            })
+            .build();
     }
 
     function getOrCreateKey(type) {
@@ -584,8 +587,8 @@
     }
 
     global.Injection = {
-        Builder: Builder,
-        Registration: Registration,
+        ContainerBuilder: ContainerBuilder,
+        RegistrationBuilder: RegistrationBuilder,
         Container: Container,
         Parameter: Parameter,
         ctor: ctor,
