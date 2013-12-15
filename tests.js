@@ -915,14 +915,9 @@
         }
 
         function typeIsResolvedToInstancePerContainer(container) {
-            when("resolved twice from same container", function () {
-                var result1 = container.resolve(type);
-                var result2 = container.resolve(type);
-
-                then("same instance returned both times", function () {
-                    result1.should.equal(result2);
-                });
-            });
+            when("resolved twice from same container", sameInstanceReturnedBothTimes(container));
+            
+            when("resolved twice from sub-container", sameInstanceReturnedBothTimes(container.buildSubContainer()));
 
             when("resolved from outer & inner containers", function () {
                 var inner = container.buildSubContainer();
@@ -935,15 +930,32 @@
             });
         }
 
-        function typeIsResolvedToInstancePerDependency(container) {
-            when("resolved twice", function () {
+        function sameInstanceReturnedBothTimes(container) {
+            return function() {
                 var result1 = container.resolve(type);
                 var result2 = container.resolve(type);
 
-                then("two separate instances are created", function () {
+                then("same instance returned both times", function() {
+                    result1.should.equal(result2);
+                });
+            };
+        }
+
+        function typeIsResolvedToInstancePerDependency(container) {
+            when("resolved twice", differentInstanceReturnedEachTime(container));
+
+            when("resolved twice from sub-container", differentInstanceReturnedEachTime(container.buildSubContainer()));
+        }
+
+        function differentInstanceReturnedEachTime(container) {
+            return function() {
+                var result1 = container.resolve(type);
+                var result2 = container.resolve(type);
+
+                then("two separate instances are created", function() {
                     result1.should.not.equal(result2);
                 });
-            });
+            };
         }
     });
 
