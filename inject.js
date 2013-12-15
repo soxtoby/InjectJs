@@ -5,17 +5,16 @@
     var parameterMarker = 'param:';
     var undefined;
 
-    function ContainerBuilder(parentRegistrationMap) {
-        this._parentRegistrationMap = parentRegistrationMap;
+    function ContainerBuilder() {
         this._registrationBuilders = [];
         this.useInstancePerContainer();
     };
 
     ContainerBuilder.prototype = {
-        build: function () {
+        build: function (parentRegistrationMap) {
             this._containerBuilt = true;
 
-            return new Container(this._registrationBuilders, this._defaultLifetime, this._parentRegistrationMap);
+            return new Container(this._registrationBuilders, this._defaultLifetime, parentRegistrationMap);
         },
 
         forType: function (type) {
@@ -378,14 +377,14 @@
                 : '';
         },
 
-        buildSubContainer: function (registration) {
-            var builder = new ContainerBuilder(this._registrations);
+        buildSubContainer: function (setup) {
+            var builder = new ContainerBuilder();
             builder.setDefaultLifetime(this._defaultLifetime);
 
-            if (registration)
-                registration(builder);
+            if (setup)
+                setup(builder);
 
-            var subContainer = builder.build();
+            var subContainer = builder.build(this._registrations);
 
             this.registerDisposable(subContainer);
 
