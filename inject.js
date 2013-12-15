@@ -6,7 +6,7 @@
     var undefined;
 
     function ContainerBuilder(parentRegistrationMap) {
-        this._parentRegistrationMap = parentRegistrationMap || {};
+        this._parentRegistrationMap = parentRegistrationMap;
         this._registrationBuilders = [];
         this.useInstancePerContainer();
     };
@@ -15,15 +15,7 @@
         build: function () {
             this._containerBuilt = true;
 
-            var registrationMap = Object.create(this._parentRegistrationMap);
-
-            var container = new Container(registrationMap, this._defaultLifetime);
-
-            this._registrationBuilders.forEach(function (builder) {
-                registrationMap[getOrCreateKey(builder.registeredAs)] = builder.build(container);
-            });
-
-            return container;
+            return new Container(this._registrationBuilders, this._defaultLifetime, this._parentRegistrationMap);
         },
 
         forType: function (type) {
@@ -332,12 +324,16 @@
         }
     }
 
-    function Container(registrationMap, defaultLifetime) {
-        this._registrations = registrationMap;
+    function Container(registrationBuilders, defaultLifetime, parentRegistrationMap) {
         this._defaultLifetime = defaultLifetime;
         this._disposables = [];
         this._containerScope = new InstanceScope(this);
         this._registrationScope = [];
+        
+        this._registrations = Object.create(parentRegistrationMap || {});
+        registrationBuilders.forEach(function (builder) {
+            this._registrations[getOrCreateKey(builder.registeredAs)] = builder.build(this);
+        }, this);
 
         this._registerSelf();
     };
