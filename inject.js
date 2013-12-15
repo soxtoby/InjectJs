@@ -248,16 +248,18 @@
     }
 
     function singleInstance(registrationBuilder, registrationContainer, instanceFactory) {
-        var key = getOrCreateKey(registrationBuilder.registeredAs);
         return function (resolvingContainer, registration) {
-            return registrationContainer._containerScope.getOrCreate(key, registration, instanceFactory);
+            return registrationContainer.getOrCreateScoped(registrationBuilder.registeredAs, function() {
+                return instanceFactory(registrationContainer, registration);
+            });
         };
     }
 
     function instancePerContainer(registrationBuilder, registrationContainer, instanceFactory) {
-        var key = getOrCreateKey(registrationBuilder.registeredAs);
         return function (resolvingContainer, registration) {
-            return resolvingContainer._containerScope.getOrCreate(key, registration, instanceFactory);
+            return resolvingContainer.getOrCreateScoped(registrationBuilder.registeredAs, function() {
+                return instanceFactory(resolvingContainer, registration);
+            });
         };
     }
 
@@ -394,6 +396,10 @@
         isRegistered: function (type) {
             return getKey(type) in this._registrations;
         },
+        
+        getOrCreateScoped: function(type, instanceFactory) {
+            return this._containerScope.getOrCreate(type, instanceFactory);
+        },
 
         registerDisposable: function (instance) {
             if (!instance || typeof instance.dispose != 'function')
@@ -431,13 +437,14 @@
     }
 
     InstanceScope.prototype = {
-        getOrCreate: function (key, registration, instanceFactory) {
+        getOrCreate: function (type, instanceFactory) {
+            var key = getOrCreateKey(type);
             return key in this._instances
                 ? this._instances[key]
-                : this.add(key, instanceFactory(this._ownerContainer, registration));
+                : this._add(key, instanceFactory(this._ownerContainer));
         },
 
-        add: function (key, instance) {
+        _add: function (key, instance) {
             this._instances[key] = instance;
             this._ownerContainer.registerDisposable(instance);
             return instance;
