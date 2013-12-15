@@ -212,7 +212,7 @@
         },
 
         then: function (callback) {
-            this._buildPostCreate = function (registrationContainer, instanceFactory) {
+            this._buildPostCreate = function (registrationBuilder, registrationContainer, instanceFactory) {
                 return function (resolvingContainer) {
                     var value = instanceFactory(resolvingContainer);
                     callback(value, resolvingContainer);
@@ -221,53 +221,58 @@
             };
         },
 
-        _buildPostCreate: function (registrationContainer, instanceFactory) {
+        _buildPostCreate: function (registrationBuilder, registrationContainer, instanceFactory) {
             return instanceFactory;
         },
 
         _ensureTyping: function () {
             ensureTyping(this.registeredAs, this._resolvesTo);
         },
-        
-        build: function(container) {
-            var lifetime = this._buildLifetime.bind(this, container);
-            var postBuild = this._buildPostCreate.bind(this, container);
-            var factory = lifetime(postBuild(this._instanceFactory));
-            return new Registration(this.name, factory, this._parameterHooks);
+
+        build: function (container) {
+            var instanceFactoryWithPostCreate = this._buildPostCreate(this, container, this._instanceFactory);
+            var instanceFactoryWithPostCreateAndLifetime = this._buildLifetime(this, container, instanceFactoryWithPostCreate);
+            return new Registration(this.name, instanceFactoryWithPostCreateAndLifetime, this._parameterHooks);
         }
     };
-    
-    function Registration(name, factory, parameterHooks) {
+
+    function Registration(name, instanceFactory, parameterHooks) {
         this.name = name;
-        this.factory = factory;
+        this._instanceFactory = instanceFactory;
         this.parameterHooks = parameterHooks;
     }
 
-    function instancePerDependency(registrationContainer, instanceFactory) {
-        return function (resolvingContainer) {
-            var instance = instanceFactory.call(this, resolvingContainer);
+    Registration.prototype = {
+        factory: function (container) {
+            return this._instanceFactory(container, this);
+        }
+    };
+
+    function instancePerDependency(registrationBuilder, registrationContainer, instanceFactory) {
+        return function (resolvingContainer, registration) {
+            var instance = instanceFactory(resolvingContainer, registration);
             resolvingContainer.registerDisposable(instance);
             return instance;
         };
     }
 
-    function singleInstance(registrationContainer, instanceFactory) {
-        var key = getOrCreateKey(this.registeredAs);
-        return function (resolvingContainer) {
-            return registrationContainer._containerScope.getOrCreate(key, instanceFactory.bind(this));
+    function singleInstance(registrationBuilder, registrationContainer, instanceFactory) {
+        var key = getOrCreateKey(registrationBuilder.registeredAs);
+        return function (resolvingContainer, registration) {
+            return registrationContainer._containerScope.getOrCreate(key, registration, instanceFactory);
         };
     }
 
-    function instancePerContainer(registrationContainer, instanceFactory) {
-        var key = getOrCreateKey(this.registeredAs);
-        return function (resolvingContainer) {
-            return resolvingContainer._containerScope.getOrCreate(key, instanceFactory.bind(this));
+    function instancePerContainer(registrationBuilder, registrationContainer, instanceFactory) {
+        var key = getOrCreateKey(registrationBuilder.registeredAs);
+        return function (resolvingContainer, registration) {
+            return resolvingContainer._containerScope.getOrCreate(key, registration, instanceFactory);
         };
     }
 
-    function unmanagedLifetime(registrationContainer, instanceFactory) {
-        return function (resolvingContainer) {
-            return instanceFactory.call(this, resolvingContainer);
+    function unmanagedLifetime(registrationBuilder, registrationContainer, instanceFactory) {
+        return function (resolvingContainer, registration) {
+            return instanceFactory(resolvingContainer, registration);
         };
     }
 
@@ -431,10 +436,10 @@
     }
 
     InstanceScope.prototype = {
-        getOrCreate: function (key, instanceFactory) {
+        getOrCreate: function (key, registration, instanceFactory) {
             return key in this._instances
                 ? this._instances[key]
-                : this.add(key, instanceFactory(this._ownerContainer));
+                : this.add(key, instanceFactory(this._ownerContainer, registration));
         },
 
         add: function (key, instance) {
@@ -456,13 +461,13 @@
             return new Parameter(dependencies[i], p, i);
         });
 
-        return function (container) {
-            var args = parameters.map(resolveParameter, this);
+        return function (container, registration) {
+            var args = parameters.map(resolveParameter);
             var resolvedConstructor = Function.prototype.bind.apply(constructor, [null].concat(args));
             return new resolvedConstructor();
 
             function resolveParameter(parameter) {
-                var parameterHooks = this.parameterHooks;
+                var parameterHooks = registration.parameterHooks;
                 for (var i = 0; i < parameterHooks.length; i++)
                     if (parameterHooks[i].matches(parameter))
                         return parameterHooks[i].resolve(container, parameter);
