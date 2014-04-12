@@ -76,14 +76,6 @@
             || ('' + key);
     }
 
-    function curry(fn, args) {
-        return function curriedFn() {
-            return arguments.length
-                ? curry.call(this, fn, (args || []).concat(makeArray(arguments)))
-                : fn.apply(this, args);
-        }
-    }
-
     function pcall(fn) {
         return papply(fn, makeArray(arguments, 1));
     }
@@ -92,37 +84,6 @@
         return function partial() {
             return fn.apply(this, args.concat(makeArray(arguments)));
         };
-    }
-
-    function sparseApply(fn, args) {
-        return function partial() {
-            var firstDefinedArg = pcall(apply, defaultArg);
-            var filledInArgs = zip(args, makeArray(arguments)).map(firstDefinedArg);
-            return apply(fn, filledInArgs);
-        };
-    }
-
-    function apply(fn, args) {
-        return fn.apply(this, args);
-    }
-
-    function zip() {
-        var arrays = makeArray(arguments);
-        var maxLength = apply(Math.max, pick(arrays, 'length'));
-        var getItemsAtIndex = pcall(pick, arrays);
-        return range(maxLength)
-            .map(getItemsAtIndex);
-    }
-
-    function pick(items, property) {
-        return items.map(function (item) { return item[property]; });
-    }
-
-    function range(length) {
-        var array = [];
-        for (var i = 0; i < length; i++)
-            array[i] = [i];
-        return array;
     }
 
     function newScope() {
@@ -180,10 +141,6 @@
 
     function makeArray(args, startIndex) {
         return Array.prototype.slice.call(args, startIndex);
-    }
-
-    function unwrap(fnFn) {
-        return function() { return fnFn.apply(this, arguments)(); };
     }
 
     function chain(fn) {
@@ -258,14 +215,14 @@
             var innerFactory = this.factory;
             this.factory = ctor([resolveFn], function (resolve) {
                 var originalKeys = dependencyKeys(innerFactory);
-                var hookValues = originalKeys.map(pcall(hook, resolve));
-                var unresolvedKeys = originalKeys.filter(function (key, i) { return notDefined(hookValues[i]); });
-                return resolve.function(ctor(unresolvedKeys, function () {
-                    var newArgs = makeArray(arguments);
-                    var i = 0;
-                    var allArgs = hookValues.map(function (val) { return notDefined(val) ? newArgs[i++] : val; });
-                    return innerFactory.apply(this, allArgs);
-                }));
+                var hookedKeys = originalKeys.map(function (key) {
+                    var hookValue = hook(resolve, key);
+                    return isDefined(hookValue)
+                        ? new Registration(constant(hookValue))
+                        : key;
+                });
+
+                return resolve.function(ctor(hookedKeys, pcall(innerFactory)));
             });
         }),
 
