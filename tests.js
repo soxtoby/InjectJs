@@ -11,14 +11,13 @@
         this.dispose = this.disposeMethod = sinon.spy();
     }
     disposableType.prototype = new type();
-    var builder = new Injection.ContainerBuilder();
 
     describe("empty container", function () {
-        var sut = builder.build();
+        var sut = inject();
 
         when("resolving existing class", function () {
-            function unregisteredClass() { };
-            var result = sut.resolve(unregisteredClass);
+            function unregisteredClass() { }
+            var result = sut(unregisteredClass);
 
             it("instantiates unregistered class", function () {
                 result.should.be.an.instanceOf(unregisteredClass);
@@ -27,7 +26,7 @@
 
         when("resolving existing class with parameter but no specified dependencies", function () {
             function typeWithParameter(param) { this.arg = param; }
-            var result = sut.resolve(typeWithParameter);
+            var result = sut(typeWithParameter);
 
             it("resolves to instance of type with nothing passed in", function () {
                 result.should.be.an.instanceOf(typeWithParameter);
@@ -37,7 +36,7 @@
 
         when("type has multiple dependencies", function () {
             when("resolving type", function () {
-                var result = sut.resolve(typeWithDependencies);
+                var result = sut(typeWithDependencies);
 
                 it("instantiates type with dependencies", function () {
                     result.dependency1.should.be.an.instanceOf(dependency1);
@@ -46,7 +45,7 @@
             });
 
             when("resolving factory function with no parameters", function () {
-                var factory = sut.resolve(Injection.factoryFor(typeWithDependencies));
+                var factory = sut(func(typeWithDependencies));
 
                 then("calling factory instantiates type with dependencies", function () {
                     var result = factory();
@@ -56,7 +55,7 @@
             });
 
             when("resolving factory function with partial parameters", function () {
-                var factory = sut.resolve(Injection.factoryFor(typeWithDependencies, [dependency2]));
+                var factory = sut(func(typeWithDependencies, [dependency2]));
 
                 when("calling factory function", function () {
                     var dependency2Instance = new dependency2();
@@ -71,7 +70,7 @@
 
         when("resolving optional dependency", function () {
             when("with no default value", function () {
-                var result = sut.resolve(Injection.optional(type));
+                var result = sut(optional(type));
 
                 it("resolves to null", function () {
                     expect(result).to.equal(null);
@@ -80,7 +79,7 @@
 
             when("with a default value", function () {
                 var expectedValue = {};
-                var result = sut.resolve(Injection.optional(type, expectedValue));
+                var result = sut(optional(type, expectedValue));
 
                 it("resolves to default value", function () {
                     result.should.equal(expectedValue);
@@ -100,7 +99,7 @@
         });
 
         when("resolving a container", function () {
-            var result = sut.resolve(Injection.Container);
+            var result = sut(inject.resolve);
 
             then("same container instance is returned", function () {
                 result.should.equal(sut);
@@ -110,20 +109,20 @@
 
     describe("type registration", function () {
         when("setting up a registration for a type", function () {
-            var registration = builder.forType(type);
+            var registration = inject.forType(type);
 
             when("subtype created for type", function () {
                 function subType() { }
                 subType.prototype = new type();
                 var chain = registration.create(subType);
-                var sut = builder.build();
+                var sut = inject([registration]);
 
                 it("can be chained", function () {
                     chain.should.equal(registration);
                 });
 
                 when("resolving type", function () {
-                    var result = sut.resolve(type);
+                    var result = sut(type);
 
                     it("instantiates the sub type", function () {
                         result.should.be.an.instanceOf(subType);
@@ -134,14 +133,14 @@
             when("value used for type", function () {
                 var value = new disposableType();
                 var chain = registration.use(value);
-                var sut = builder.build();
+                var sut = inject([registration]);
 
                 it("can be chained", function () {
                     chain.should.equal(registration);
                 });
 
                 when("type is resolved", function () {
-                    var result = sut.resolve(type);
+                    var result = sut(type);
 
                     it("resolves to the object", function () {
                         result.should.equal(value);
@@ -160,18 +159,19 @@
             when("factory method called for type", function () {
                 var expectedResult = new type();
                 var factory = sinon.stub().returns(expectedResult);
+                factory.dependencies = [dependency1];
                 var chain = registration.call(factory);
-                var sut = builder.build();
+                var sut = inject([registration]);
 
                 it("can be chained", function () {
                     chain.should.equal(registration);
                 });
 
                 when("type is resolved", function () {
-                    var result = sut.resolve(type);
+                    var result = sut(type);
 
-                    then("container is passed in to factory", function () {
-                        factory.firstCall.args[0].should.be.an.instanceOf(Injection.Container);
+                    then("dependencies are passed in to factory", function () {
+                        factory.firstCall.args[0].should.be.an.instanceOf(dependency1);
                     });
 
                     then("resolves to factory return value", function () {
@@ -182,13 +182,13 @@
         });
 
         when("setting up a registration for a key", function () {
-            var registration = builder.forKey('named');
+            var registration = inject.forKey('named');
 
             when("type created for key", function () {
                 registration.create(type);
 
                 when("resolving key", function () {
-                    var result = builder.build().resolve('named');
+                    var result = inject([registration])('named');
 
                     it("resolves to instance of the registered type", function () {
                         result.should.be.an.instanceOf(type);
@@ -196,7 +196,7 @@
                 });
 
                 when("resolving named dependency", function () {
-                    var result = builder.build().resolve(Injection.named(type, 'named'));
+                    var result = inject([registration])(named(type, 'named'));
 
                     it("resolves to instance of the registered type", function () {
                         result.should.be.an.instanceOf(type);
@@ -205,12 +205,11 @@
 
                 when("another type is registered with a different name", function () {
                     function type2() { }
-
-                    builder.forKey('different').create(type2);
-                    var sut = builder.build();
+                    var reg2 = inject.forKey('different').create(type2);
+                    var sut = inject([registration, reg2]);
 
                     when("resolving first name", function () {
-                        var result = sut.resolve('named');
+                        var result = sut('named');
 
                         it("resolves to instance of the first type", function () {
                             result.should.be.an.instanceOf(type);
@@ -218,7 +217,7 @@
                     });
 
                     when("resolving the second name", function () {
-                        var result = sut.resolve('different');
+                        var result = sut('different');
 
                         it("resolves to instance of the second type", function () {
                             result.should.be.an.instanceOf(type2);
@@ -228,49 +227,8 @@
             });
         });
 
-        when("setting up a registration for a parameter name", function () {
-            var registration = builder.forParameter('param');
-
-            when("type created for parameter", function () {
-                registration.create(type);
-
-                when("resolving type with registered parameter name", function () {
-                    function typeWithParameter(param) {
-                        this.arg = param;
-                    }
-                    var result = builder.build().resolve(typeWithParameter);
-
-                    it("resolves to instance of resolved type", function () {
-                        result.should.be.an.instanceOf(typeWithParameter);
-                    });
-
-                    it("creates resolved type with instance of registered parameter type", function () {
-                        result.arg.should.be.an.instanceOf(type);
-                    });
-                });
-
-                when("resolving type with registered parameter name on new line", function () {
-                    // It's important that this function's parameter name is on a different line
-                    // to the '(', to test the function parameter parsing
-                    function typeWithParameter(
-                                param) {
-                        this.arg = param;
-                    }
-                    var result = builder.build().resolve(typeWithParameter);
-
-                    it("resolves to instance of resolved type", function () {
-                        result.should.be.an.instanceOf(typeWithParameter);
-                    });
-
-                    it("creates resolved type with instance of registered parameter type", function () {
-                        result.arg.should.be.an.instanceOf(type);
-                    });
-                });
-            });
-        });
-
         when("type specifies its own parameter names", function () {
-            var typeWithParameters = Injection.ctor(['foo'], function (originalName) { });
+            var typeWithParameters = ctor(['foo'], function (originalName) { });
             typeWithParameters.parameters = ['specifiedName'];
 
             when("type is registered with parameter hook", function () {
@@ -290,15 +248,15 @@
         });
 
         when("registering a constructor", function () {
-            var registration = builder.create(type);
-            var sut = builder.build();
+            var registration = inject.create(type);
+            var sut = inject([registration]);
 
             then("registration is returned", function () {
                 registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
             });
 
             when("type is resolved", function () {
-                var result = sut.resolve(type);
+                var result = sut(type);
 
                 then("type resolves to instance of type", function () {
                     result.should.be.an.instanceOf(type);
@@ -307,16 +265,16 @@
         });
 
         when("registering constructor as a singleton", function () {
-            var registration = builder.createSingle(type);
-            var sut = builder.build();
+            var registration = inject.createSingle(type);
+            var sut = inject([registration]);
 
             then("registration is returned", function () {
                 registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
             });
 
             when("resolving type twice", function () {
-                var result1 = sut.resolve(type);
-                var result2 = sut.resolve(type);
+                var result1 = sut(type);
+                var result2 = sut(type);
 
                 then("type resolves to the same instance", function () {
                     result1.should.equal(result2);
@@ -326,7 +284,7 @@
 
         when("registering a factory method", function () {
             var expectedResult;
-            var registration = builder.call(function () { return expectedResult; });
+            var registration = inject.call(function () { return expectedResult; });
 
             then("registration is returned", function () {
                 registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
@@ -334,7 +292,7 @@
 
             when("registration is set up for type", function () {
                 var chain = registration.forType(type);
-                var sut = builder.build();
+                var sut = inject([registration]);
 
                 it("can be chained", function () {
                     chain.should.equal(registration);
@@ -342,7 +300,7 @@
 
                 when("factory returns type instance & type is resolved", function () {
                     expectedResult = new type();
-                    var result = sut.resolve(type);
+                    var result = sut(type);
 
                     then("type resolves to factory return value", function () {
                         result.should.equal(expectedResult);
@@ -351,7 +309,7 @@
 
                 when("factory returns null & type is resolved", function () {
                     expectedResult = null;
-                    var result = sut.resolve(type);
+                    var result = sut(type);
 
                     then("type resolves to null", function () {
                         should.equal(result, null);
@@ -362,7 +320,7 @@
 
         when("registering a value", function () {
             var value = {};
-            var registration = builder.use(value);
+            var registration = inject.use(value);
 
             then("registration is returned", function () {
                 registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
@@ -370,14 +328,14 @@
 
             when("registration is set up for key", function () {
                 var chain = registration.forKey('key');
-                var sut = builder.build();
+                var sut = inject([registration]);
 
                 it("can be chained", function () {
                     chain.should.equal(registration);
                 });
 
                 when("key is resolved", function () {
-                    var result = sut.resolve('key');
+                    var result = sut('key');
 
                     then("key resolves to value", function () {
                         result.should.equal(value);
@@ -387,10 +345,10 @@
         });
 
         when("registering a null value for a type", function () {
-            builder.use(null).forType(type);
+            var registration = inject.use(null).forType(type);
 
             when("type is resolved", function () {
-                var result = builder.build().resolve(type);
+                var result = inject([registration])(type);
 
                 it("resolves type to null", function () {
                     should.equal(result, null);
@@ -402,38 +360,36 @@
             var callback = sinon.spy(function (o) {
                 o.callbackProperty = true;
             });
-            builder.create(type).then(callback);
-            var sut = builder.build();
+            var registration = inject.create(type).then(callback);
+            var sut = inject([registration]);
 
             when("type is resolved", function () {
-                var result = sut.resolve(type);
+                var result = sut(type);
 
-                then("callback is called with resolved value and container", function () {
-                    callback.should.have.been.calledWith(result, sut);
+                then("callback is called with resolved value", function () {
+                    callback.should.have.been.calledWith(result);
                 });
             });
         });
     });
 
     describe("parameter registration", function () {
-        var typeRegistration = builder.forType(typeWithDependencies);
+        var typeRegistration = inject.forType(typeWithDependencies);
 
         when("type is registered with parameter hook", function () {
             var dependency1Instance = new dependency1();
-            var parameterResolver = sinon.stub().returns(dependency1Instance);
-            typeRegistration
-                .useParameterHook(
-                    function (p) { return p.type == dependency1; },
-                    parameterResolver);
-            var sut = builder.build();
+            var parameterResolver = sinon.spy(function (r, d) {
+                if (d == dependency1) return dependency1Instance;
+            });
+            typeRegistration.useParameterHook(parameterResolver);
+            var sut = inject([typeRegistration]);
 
             when("type is resolved", function () {
-                var result = sut.resolve(typeWithDependencies);
+                var result = sut(typeWithDependencies);
 
                 then("parameter resolver called with container & parameter", function () {
-                    var args = parameterResolver.firstCall.args;
-                    args[0].should.be.an.instanceOf(Injection.Container);
-                    args[1].should.deep.equal(new Injection.Parameter(dependency1, 'd1', 0));
+                    parameterResolver.should.have.been.calledWith(sut(inject.resolve), dependency1);
+                    parameterResolver.should.have.been.calledWith(sut(inject.resolve), dependency2);
                 });
 
                 then("parameter is resolved to parameter factory result", function () {
