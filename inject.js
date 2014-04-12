@@ -185,7 +185,7 @@
         once: chain(function () {
             var key = this.key;
             this._lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
-                return registeredScope(key, pcall(registeredResolve.fn, factory));
+                return registeredScope(key, pcall(registeredResolve.function, factory));
             };
         }),
 
@@ -224,6 +224,20 @@
 
                 return resolve.function(ctor(hookedKeys, pcall(innerFactory)));
             });
+        }),
+
+        withDependency: function(key, value) {
+            return this.useParameterHook(function(resolve, paramKey) {
+                if (paramKey == key) return value;
+            });
+        },
+
+        withArguments: chain(function (){
+            var args = makeArray(arguments);
+            var innerFactory = this.factory;
+            this.factory = ctor(
+                dependencyKeys(innerFactory).slice(args.length),
+                papply(innerFactory, args));
         }),
 
         build: function (registeredResolve, registeredScope) {
