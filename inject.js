@@ -36,7 +36,7 @@
 
     function defaultFactory(resolve, key) {
         if (key instanceof Registration)
-            return key.build();
+            return key.build(resolve, resolve(scopeFn));
         var injectedFn = resolve.injected(key);
         if (injectedFn)
             return injectedFn;
@@ -91,23 +91,40 @@
             values = [],
             get = lookup(keys, values);
 
-        return function scope(key, resolveForKey) {
+        var scope = function scope(key, resolveForKey) {
             return get(key, function() {
                 var value = resolveForKey();
                 keys.push(key);
                 values.push(value);
+                if (value && 'dispose' in value)
+                    value.dispose = decorate(value.dispose, pcall(get.remove, value));
                 return value;
             });
         };
+        scope.dispose = function dispose() {
+            values.slice().forEach(function (value) {
+                if ('dispose' in value)
+                    value.dispose();
+            });
+        };
+        return scope;
     }
 
     function lookup(keys, values) {
-        return function get(key, fallback) {
-            var i = keys.indexOf(key);
+        var get = function get(key, fallback) {
+            var i = key ? keys.indexOf(key) : -1;
             return i >= 0
                 ? values[i]
                 : (fallback || constant())();
         };
+        get.remove = function (value) {
+            var i = values.indexOf(value);
+            if (i >= 0) {
+                keys.splice(i, 1);
+                values.splice(i, 1);
+            }
+        };
+        return get;
     }
 
     function defaultArg(arg, defaultValue) {
@@ -144,10 +161,16 @@
     }
 
     function chain(fn) {
-        return function() {
-            fn.apply(this, arguments);
+        return decorate(fn, function() {
             return this;
-        }
+        });
+    }
+
+    function decorate(fn, decoration) {
+        return function decorated() {
+            var result = fn.apply(this, arguments);
+            return decoration.call(this, result);
+        };
     }
 
     function resolveFn() {
@@ -176,6 +199,7 @@
 
         use: chain(function (value){
             this.factory = constant(value);
+            this.doNotDispose();
         }),
 
         call: chain(function (fn){
@@ -198,17 +222,26 @@
 
         perDependency: chain(function () {
             this._lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
-                return resolve.function(factory)
+                return currentScope(null, pcall(resolve.function, factory));
+            };
+        }),
+
+        doNotDispose: chain(function () {
+            var innerLifetime = this._lifeTime;
+            this._lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
+                return innerLifetime(
+                        function () { return constant(resolve.function(factory)); },
+                        registeredResolve, registeredScope, resolve, currentScope)
+                    ();
             };
         }),
 
         then: chain(function (callback) {
-            var innerFactory = this.factory;
-            this.factory = ctor(dependencyKeys(innerFactory), function () {
-                var value = innerFactory.apply(this, arguments);
-                callback(value);
-                return value;
-            });
+            this.factory = ctor(dependencyKeys(this.factory),
+                decorate(this.factory, function (value) {
+                    callback(value);
+                    return value;
+                }));
         }),
 
         useParameterHook: chain(function (hook) {
@@ -246,37 +279,48 @@
         }
     };
 
-    window.inject = function inject(registrations) {
+    window.inject = function inject(registrations, parentResolve) {
         var scope = newScope();
         function resolve(key) { return resolveValue(resolve, key); }
-        resolve.injected = lookup(
+        var injectedLookup = lookup(
             (registrations || [])
-                .map(function(r) {return r.key; })
+                .map(function (r) {
+                    return r.key;
+                })
                 .concat(resolveFn, scopeFn),
             (registrations || [])
-                .map(function(r) { return r.build(resolve, scope); })
+                .map(function (r) {
+                    return r.build(resolve, scope);
+                })
                 .concat(constant(resolve), constant(scope)));
-        resolve.dispose = function() { };
+        resolve.injected = injectedLookup;
+        resolve.dispose = scope.dispose;
         resolve.function = pcall(resolveFunction, resolve);
+
+        if (parentResolve) {
+            resolve.injected = function (key, fallback) {
+                return injectedLookup(key, function () {
+                    return parentResolve.injected(key, fallback);
+                });
+            };
+            parentResolve(new Registration(constant(resolve)));
+        }
+
         return resolve;
     };
 
     window.inject.resolve = resolveFn;
 
-    window.inject.forType = function (type) {
-        return new Registration(constructor(type)).forType(type);
+    window.inject.forType = window.inject.create = function (type) {
+        return new Registration().forType(type).create(type);
     };
 
     window.inject.forKey = function (key) {
         return new Registration().forKey(key);
     };
 
-    window.inject.create = function (type) {
-        return new Registration().forType(type).create(type);
-    };
-
     window.inject.createSingle = function (type) {
-        return new Registration().forType(type).create(type).once();
+        return window.inject.create(type).once();
     };
 
     window.inject.call = function (fn) {

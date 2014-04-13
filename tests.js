@@ -426,45 +426,32 @@
     });
 
     describe("sub-containers", function () {
-        when("building a sub-container", function () {
-            var registration = sinon.spy();
-            var sut = builder.build();
-            sut.buildSubContainer(registration);
-
-            then("registration callback is called with a ContainerBuilder", function () {
-                registration.firstCall.args[0].should.be.an.instanceOf(Injection.ContainerBuilder);
-            });
-        });
-
         when("type is registered in original container", function () {
-            builder.forKey('foo').create(type);
-            var outer = builder.build();
-            var inner = outer.buildSubContainer();
+            var outer = inject([inject.forKey('foo').create(type)]);
+            var inner = inject([], outer);
 
             then("type can be resolved from inner container", function () {
-                inner.resolve('foo').should.be.an.instanceOf(type);
+                inner('foo').should.be.an.instanceOf(type);
             });
         });
 
         when("type is registered in sub-container", function () {
-            var outer = builder.build();
-            var inner = outer.buildSubContainer(function (innerBuilder) {
-                innerBuilder.forKey('foo').create(type);
-            });
+            var outer = inject();
+            var inner = inject([inject.forKey('foo').create(type)], outer);
 
             then("type can't be resolved from outer container", function () {
-                (function () { outer.resolve('foo'); })
+                (function () { outer('foo'); })
                     .should.throw();
             });
 
             then("type can be resolved from inner container", function () {
-                inner.resolve('foo').should.be.an.instanceOf(type);
+                inner('foo').should.be.an.instanceOf(type);
             });
         });
 
         when("outer container is disposed", function () {
-            var outer = builder.build();
-            var inner = outer.buildSubContainer();
+            var outer = inject();
+            var inner = inject([], outer);
             this.spy(inner, 'dispose');
 
             outer.dispose();
@@ -475,8 +462,8 @@
         });
 
         when("inner container is disposed", function () {
-            var outer = builder.build();
-            var inner = outer.buildSubContainer();
+            var outer = inject();
+            var inner = inject([], outer);
             inner.dispose();
             this.spy(inner, 'dispose');
 
@@ -492,17 +479,17 @@
 
     describe("lifetimes", function () {
         when("registered as singleton in outer container", function () {
-            var registration = builder.forType(disposableType);
+            var registration = inject.forType(disposableType);
             var chain = registration.once();
-            var outer = builder.build();
+            var outer = inject([registration]);
 
             it("can be chained", function () {
                 chain.should.equal(registration);
             });
 
             when("resolved twice from same container", function () {
-                var result1 = outer.resolve(disposableType);
-                var result2 = outer.resolve(disposableType);
+                var result1 = outer(disposableType);
+                var result2 = outer(disposableType);
 
                 then("same instance returned both times", function () {
                     result1.should.equal(result2);
@@ -510,9 +497,9 @@
             });
 
             when("resolved from outer & inner containers", function () {
-                var inner = outer.buildSubContainer();
-                var innerResult = inner.resolve(disposableType);
-                var outerResult = outer.resolve(disposableType);
+                var inner = inject([], outer);
+                var innerResult = inner(disposableType);
+                var outerResult = outer(disposableType);
 
                 then("same instance returned both times", function () {
                     outerResult.should.equal(innerResult);
@@ -537,15 +524,13 @@
         });
 
         when("registered as singleton in inner container", function () {
-            builder.create(disposableType).perDependency();
-            var outer = builder.build();
-            var inner = outer.buildSubContainer(function (b) {
-                return b.createSingle(disposableType);
-            });
+            var registration = inject.create(disposableType).perDependency();
+            var outer = inject([registration]);
+            var inner = inject([inject.createSingle(disposableType)], outer);
 
             when("resolved from outer container twice", function () {
-                var result1 = outer.resolve(disposableType);
-                var result2 = outer.resolve(disposableType);
+                var result1 = outer(disposableType);
+                var result2 = outer(disposableType);
 
                 then("different instances returned", function () {
                     return result1.should.not.equal(result2);
@@ -553,8 +538,8 @@
             });
 
             when("when resolved from inner container twice", function () {
-                var result1 = inner.resolve(disposableType);
-                var result2 = inner.resolve(disposableType);
+                var result1 = inner(disposableType);
+                var result2 = inner(disposableType);
 
                 then("same instance returned both times", function () {
                     return result1.should.equal(result2);
@@ -562,8 +547,8 @@
             });
 
             when("resolved from outer & inner containers", function () {
-                var outerResult = outer.resolve(disposableType);
-                var innerResult = inner.resolve(disposableType);
+                var outerResult = outer(disposableType);
+                var innerResult = inner(disposableType);
 
                 then("different instances returned", function () {
                     return innerResult.should.not.equal(outerResult);
@@ -572,40 +557,41 @@
         });
 
         when("type with dependencies registered as singleton", function () {
-            var outerDepdendency1 = new dependency1();
-            var outerDepdendency2 = new dependency2();
-            builder.createSingle(typeWithDependencies);
-            builder.use(outerDepdendency1).forType(dependency1);
-            builder.use(outerDepdendency2).forType(dependency2);
-            var outer = builder.build();
+            var outerDependency1 = new dependency1();
+            var outerDependency2 = new dependency2();
+            var outer = inject([
+                inject.createSingle(typeWithDependencies),
+                inject.use(outerDependency1).forType(dependency1),
+                inject.use(outerDependency2).forType(dependency2)
+            ]);
 
             when("resolved from an inner container", function() {
-                var inner = outer.buildSubContainer(function(b) {
-                    b.use(new dependency1()).forType(dependency1);
-                    b.use(new dependency2()).forType(dependency2);
-                });
+                var inner = inject([
+                    inject.use(new dependency1()).forType(dependency1),
+                    inject.use(new dependency2()).forType(dependency2)
+                ], outer);
 
-                var result = inner.resolve(typeWithDependencies);
+                var result = inner(typeWithDependencies);
 
                 then("dependencies are resolved from outer container", function() {
-                    result.dependency1.should.equal(outerDepdendency1);
-                    result.dependency2.should.equal(outerDepdendency2);
+                    result.dependency1.should.equal(outerDependency1);
+                    result.dependency2.should.equal(outerDependency2);
                 });
             });
         });
 
         when("registered with instance per container lifetime", function () {
-            var registration = builder.forType(disposableType);
+            var registration = inject.forType(disposableType);
             var chain = registration.perContainer();
-            var outer = builder.build();
+            var outer = inject([registration]);
 
             it("can be chained", function () {
                 chain.should.equal(registration);
             });
 
             when("resolved twice from same container", function () {
-                var result1 = outer.resolve(disposableType);
-                var result2 = outer.resolve(disposableType);
+                var result1 = outer(disposableType);
+                var result2 = outer(disposableType);
 
                 then("same instance returned both times", function () {
                     result1.should.equal(result2);
@@ -613,9 +599,9 @@
             });
 
             when("resolved from outer & inner containers", function () {
-                var inner = outer.buildSubContainer();
-                var result1 = outer.resolve(disposableType);
-                var result2 = inner.resolve(disposableType);
+                var inner = inject([], outer);
+                var result1 = outer(disposableType);
+                var result2 = inner(disposableType);
 
                 then("two separate instances are created", function () {
                     result1.should.not.equal(result2);
@@ -648,18 +634,18 @@
         });
 
         when("registered with instance per dependency lifetime", function () {
-            var registration = builder.forType(disposableType);
+            var registration = inject.forType(disposableType);
             var chain = registration.perDependency();
 
-            var sut = builder.build();
+            var sut = inject([registration]);
 
             it("can be chained", function () {
                 chain.should.equal(registration);
             });
 
             when("type is resolved twice", function () {
-                var result1 = sut.resolve(disposableType);
-                var result2 = sut.resolve(disposableType);
+                var result1 = sut(disposableType);
+                var result2 = sut(disposableType);
 
                 then("two separate instances are created", function () {
                     result1.should.not.equal(result2);
