@@ -1,63 +1,126 @@
 ﻿(function () {
-    function resolveValue(resolve, key) {
-        return resolveFunction(resolve, defaultFactory(resolve, key));
-    }
+    window.inject = extend(function inject(registrations, parentResolve) {
+        var scope = newScope();
+        var getInjectedFactory = newLookup(registeredKeys(), registeredFactories());
+        var getParentFactory = parentResolve && parentResolve.injected || newLookup([], []);
+        extend(resolve, {
+            injected: resolveInjected,
+            dispose: scope.dispose,
+            function: resolveFunction,
+            defaultFactory: defaultFactory
+        });
+        if (parentResolve) parentResolve(new Registration(constant(resolve)));
+        return resolve;
 
-    function resolveFunction(resolve, fn, localKeys, localValues) {
-        return fn.apply(this, resolveDependencies(resolve, dependencyKeys(fn), localKeys || [], localValues || []));
-    }
+        function resolve(key) {
+            return resolveFunction(defaultFactory(key));
+        }
 
-    function func(key, funcDependencies) {
-        // TODO should be perDependency
-        return new Registration(ctor([resolveFn], function (resolve) {
-            return function() {
-                return resolve.function(defaultFactory(resolve, key), funcDependencies, makeArray(arguments));
-            };
-        }));
-    }
+        function resolveFunction(fn, localKeys, localValues) {
+            return fn.apply(this, resolveDependencies(dependencyKeys(fn), localKeys || [], localValues || []));
+        }
 
-    function construct(fn) {
-        return new Registration(constructor(fn));
-    }
+        function resolveInjected(key, fallback) {
+            return getInjectedFactory(key, function () {
+                return getParentFactory(key, fallback);
+            })
+        }
+
+        function defaultFactory(key) {
+            if (key instanceof Registration)
+                return key.build(resolve, resolve(scopeFn));
+            var injectedFn = resolve.injected(key);
+            if (injectedFn)
+                return injectedFn;
+            if (typeof key == 'function')
+                return constructor(key);
+            throw new Error('Failed to resolve ' + name(key));
+        }
+
+        function resolveDependencies(required, localKeys, localValues) {
+            if (!required.length)
+                return [];
+
+            var localIndex = localKeys.indexOf(required[0]);
+            return localIndex >= 0
+                ? [localValues[0]].concat(resolveDependencies(required.slice(1), slicei(localKeys, localIndex), slicei(localValues, localIndex)))
+                : [resolve(required[0])].concat(resolveDependencies(required.slice(1), localKeys, localValues));
+        }
+
+        function registeredKeys() {
+            return (registrations || [])
+                .map(function (r) {
+                    return r.key;
+                })
+                .concat(resolveFn, scopeFn);
+        }
+
+        function registeredFactories() {
+            return (registrations || [])
+                .map(function (r) {
+                    return r.build(resolve, scope);
+                })
+                .concat(constant(resolve), constant(scope));
+        }
+    }, {
+        ctor: ctor,
+        resolve: resolveFn,
+
+        forType: function (type) {
+            return new Registration().forType(type).create(type);
+        },
+
+        create: function (type) {
+            return inject.forType(type);
+        },
+
+        forKey: function (key) {
+            return new Registration().forKey(key);
+        },
+
+        createSingle: function (type) {
+            return inject.create(type).once();
+        },
+
+        call: function (fn) {
+            return new Registration(fn);
+        },
+
+        use: function (value) {
+            return new Registration(constant(value));
+        },
+
+        func: function (key, funcDependencies) {
+            // TODO should be perDependency
+            return new Registration(ctor([resolveFn], function (resolve) {
+                return variadic(function(args) {
+                    return resolve.function(resolve.defaultFactory(key), funcDependencies, args);
+                });
+            }));
+        },
+
+        optional: function (key, defaultValue) {
+            return new Registration(ctor([resolveFn], function (resolve) {
+                var defaultValueFactory = constant(defaultArg(defaultValue, null));
+                return resolve.function(
+                    resolve.injected(key, constant(defaultValueFactory)));
+            }));
+        },
+
+        named: function (type, key) {
+            return key;
+        }
+    });
 
     function constructor(fn) {
-        return ctor(dependencyKeys(fn), function constructorFn() {
-            return new (Function.prototype.bind.apply(fn, [null].concat(makeArray(arguments))));
-        });
-    }
-
-    function optional(key, defaultValue) {
-        return new Registration(ctor([resolveFn], function (resolve) {
-            var defaultValueFactory = constant(defaultArg(defaultValue, null));
-            return resolve.function(
-                resolve.injected(key, constant(defaultValueFactory)));
+        return ctor(dependencyKeys(fn), variadic(function constructorFn(args) {
+            return new (Function.prototype.bind.apply(fn, [null].concat(args)));
         }));
-    }
-
-    function defaultFactory(resolve, key) {
-        if (key instanceof Registration)
-            return key.build(resolve, resolve(scopeFn));
-        var injectedFn = resolve.injected(key);
-        if (injectedFn)
-            return injectedFn;
-        if (typeof key == 'function')
-            return constructor(key);
-        throw new Error('Failed to resolve ' + name(key));
-    }
-
-    function resolveDependencies(resolve, required, localKeys, localValues) {
-        if (!required.length)
-            return [];
-
-        var localIndex = localKeys.indexOf(required[0]);
-        return localIndex >= 0
-            ? [localValues[0]].concat(resolveDependencies(resolve, required.slice(1), slicei(localKeys, localIndex), slicei(localValues, localIndex)))
-            : [resolve(required[0])].concat(resolveDependencies(resolve, required.slice(1), localKeys, localValues));
     }
 
     function slicei(array, index) {
         return array.filter(function (_, i) {
-            return i != index
+            return i != index;
         });
     }
 
@@ -76,55 +139,57 @@
             || ('' + key);
     }
 
-    function pcall(fn) {
-        return papply(fn, makeArray(arguments, 1));
-    }
+    var pcall = variadic(papply);
 
     function papply(fn, args) {
-        return function partial() {
-            return fn.apply(this, args.concat(makeArray(arguments)));
-        };
+        return variadic(function partial(moreArgs) {
+            return fn.apply(this, args.concat(moreArgs));
+        });
     }
 
     function newScope() {
         var keys = [],
             values = [],
-            get = lookup(keys, values);
+            lookup = newLookup(keys, values);
 
-        var scope = function scope(key, resolveForKey) {
-            return get(key, function() {
-                var value = resolveForKey();
-                keys.push(key);
-                values.push(value);
-                if (value && 'dispose' in value)
-                    value.dispose = decorate(value.dispose, pcall(get.remove, value));
-                return value;
-            });
-        };
-        scope.dispose = function dispose() {
-            values.slice().forEach(function (value) {
-                if ('dispose' in value)
-                    value.dispose();
-            });
-        };
-        return scope;
+        return extend(
+            function scope(key, resolveForKey) {
+                return lookup(key, function() {
+                    var value = resolveForKey();
+                    keys.push(key);
+                    values.push(value);
+                    if (value && 'dispose' in value)
+                        value.dispose = decorate(value.dispose, pcall(lookup.remove, value));
+                    return value;
+                });
+            }, {
+                dispose: function () {
+                    values.slice().forEach(function (value) {
+                        if ('dispose' in value)
+                            value.dispose();
+                    });
+                }
+        });
     }
 
-    function lookup(keys, values) {
-        var get = function get(key, fallback) {
-            var i = key ? keys.indexOf(key) : -1;
-            return i >= 0
-                ? values[i]
-                : (fallback || constant())();
-        };
-        get.remove = function (value) {
-            var i = values.indexOf(value);
-            if (i >= 0) {
-                keys.splice(i, 1);
-                values.splice(i, 1);
+    function newLookup(keys, values) {
+        return extend(
+            function lookup(key, fallback) {
+                var i = key ? keys.indexOf(key) : -1;
+                return i >= 0
+                    ? values[i]
+                    : (fallback || constant())();
+            },
+            {
+                remove: function (value) {
+                    var i = values.indexOf(value);
+                    if (i >= 0) {
+                        keys.splice(i, 1);
+                        values.splice(i, 1);
+                    }
+                }
             }
-        };
-        return get;
+        );
     }
 
     function defaultArg(arg, defaultValue) {
@@ -147,17 +212,8 @@
         };
     }
 
-    function named(type, key) {
-        return key;
-    }
-
-    function ctor(dependencies, fn){
-        fn.dependencies = dependencies;
-        return fn;
-    }
-
-    function makeArray(args, startIndex) {
-        return Array.prototype.slice.call(args, startIndex);
+    function ctor(dependencies, fn) {
+        return extend(fn, { dependencies: dependencies });
     }
 
     function chain(fn) {
@@ -171,6 +227,22 @@
             var result = fn.apply(this, arguments);
             return decoration.call(this, result);
         };
+    }
+
+    function extend(obj, extra) {
+        Object.keys(extra).forEach(function (key) {
+            obj[key] = extra[key];
+        });
+        return obj;
+    }
+
+    function variadic(fn) {
+        return function variadic() {
+            var args = Array.prototype.slice.call(arguments);
+            var precedingArgs = args.slice(0, fn.length - 1);
+            var variadicArgs = args.slice(fn.length - 1);
+            return fn.apply(this, precedingArgs.concat([variadicArgs]));
+        }
     }
 
     function resolveFn() {
@@ -260,81 +332,21 @@
         }),
 
         withDependency: function(key, value) {
-            return this.useParameterHook(function(resolve, paramKey) {
+            return this.useParameterHook(function (resolve, paramKey) {
                 if (paramKey == key) return value;
             });
         },
 
-        withArguments: chain(function (){
-            var args = makeArray(arguments);
-            var innerFactory = this.factory;
+        withArguments: chain(variadic(function (args) {
             this.factory = ctor(
-                dependencyKeys(innerFactory).slice(args.length),
-                papply(innerFactory, args));
-        }),
+                dependencyKeys(this.factory).slice(args.length),
+                papply(this.factory, args));
+        })),
 
         build: function (registeredResolve, registeredScope) {
             return ctor([resolveFn, scopeFn],
                 pcall(this._lifeTime, this.factory, registeredResolve, registeredScope));
         }
     };
-
-    window.inject = function inject(registrations, parentResolve) {
-        var scope = newScope();
-        function resolve(key) { return resolveValue(resolve, key); }
-        var injectedLookup = lookup(
-            (registrations || [])
-                .map(function (r) {
-                    return r.key;
-                })
-                .concat(resolveFn, scopeFn),
-            (registrations || [])
-                .map(function (r) {
-                    return r.build(resolve, scope);
-                })
-                .concat(constant(resolve), constant(scope)));
-        resolve.injected = injectedLookup;
-        resolve.dispose = scope.dispose;
-        resolve.function = pcall(resolveFunction, resolve);
-
-        if (parentResolve) {
-            resolve.injected = function (key, fallback) {
-                return injectedLookup(key, function () {
-                    return parentResolve.injected(key, fallback);
-                });
-            };
-            parentResolve(new Registration(constant(resolve)));
-        }
-
-        return resolve;
-    };
-
-    window.inject.resolve = resolveFn;
-
-    window.inject.forType = window.inject.create = function (type) {
-        return new Registration().forType(type).create(type);
-    };
-
-    window.inject.forKey = function (key) {
-        return new Registration().forKey(key);
-    };
-
-    window.inject.createSingle = function (type) {
-        return window.inject.create(type).once();
-    };
-
-    window.inject.call = function (fn) {
-        return new Registration(fn);
-    };
-
-    window.inject.use = function (value) {
-        return new Registration(constant(value));
-    };
-
-    window.ctor = ctor;
-    window.construct = construct;
-    window.func = func;
-    window.optional = optional;
-    window.named = named;
     window.Injection = { RegistrationBuilder: Registration }; // TODO remove, just for old tests
 })();

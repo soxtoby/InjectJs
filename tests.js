@@ -45,7 +45,7 @@
             });
 
             when("resolving factory function with no parameters", function () {
-                var factory = sut(func(typeWithDependencies));
+                var factory = sut(inject.func(typeWithDependencies));
 
                 then("calling factory instantiates type with dependencies", function () {
                     var result = factory();
@@ -55,7 +55,7 @@
             });
 
             when("resolving factory function with partial parameters", function () {
-                var factory = sut(func(typeWithDependencies, [dependency2]));
+                var factory = sut(inject.func(typeWithDependencies, [dependency2]));
 
                 when("calling factory function", function () {
                     var dependency2Instance = new dependency2();
@@ -70,7 +70,7 @@
 
         when("resolving optional dependency", function () {
             when("with no default value", function () {
-                var result = sut(optional(type));
+                var result = sut(inject.optional(type));
 
                 it("resolves to null", function () {
                     expect(result).to.equal(null);
@@ -79,7 +79,7 @@
 
             when("with a default value", function () {
                 var expectedValue = {};
-                var result = sut(optional(type, expectedValue));
+                var result = sut(inject.optional(type, expectedValue));
 
                 it("resolves to default value", function () {
                     result.should.equal(expectedValue);
@@ -180,7 +180,7 @@
 
             when("resolving type optionally", function () {
                 var sut = inject([registration]);
-                var result = sut(optional(type));
+                var result = sut(inject.optional(type));
 
                 it("instantiates the type", function () {
                     result.should.be.an.instanceOf(type);
@@ -203,7 +203,7 @@
                 });
 
                 when("resolving named dependency", function () {
-                    var result = inject([registration])(named(type, 'named'));
+                    var result = inject([registration])(inject.named(type, 'named'));
 
                     it("resolves to instance of the registered type", function () {
                         result.should.be.an.instanceOf(type);
@@ -863,7 +863,7 @@
 
         when("resolving named dependency to wrong type", function () {
             builder.forKey('foo').use({});
-            var action = function () { builder.build().resolve(Injection.named(type, 'foo')); };
+            var action = function () { builder.build().resolve(inject.named(type, 'foo')); };
 
             it("throws", function () {
                 action.should.throw('Value does not inherit from type');
@@ -1080,12 +1080,12 @@
         });
 
         function specifyUndefinedDependency(constructor) {
-            return function () { Injection.ctor([undefined], constructor); };
+            return function () { inject.ctor([undefined], constructor); };
         }
 
         when("specifying wrong number of dependencies", function () {
             var action = function () {
-                Injection.ctor(['foo', 'bar'], function (baz) { });
+                inject.ctor(['foo', 'bar'], function (baz) { });
             };
 
             it("throws", function () {
