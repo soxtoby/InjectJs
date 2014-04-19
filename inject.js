@@ -1,4 +1,9 @@
 ﻿(function () {
+    var resolveFn = 'inject.resolveFn';
+    var scopeFn = 'inject.scope'; // Key for current scope
+    var pcall = variadic(papply);
+    var resolveChain = [];
+
     window.inject = extend(function inject(registrations, parentResolve) {
         var scope = newScope();
         var getInjectedFactory = newLookup(registeredKeys(), registeredFactories());
@@ -13,7 +18,15 @@
         return resolve;
 
         function resolve(key) {
-            return resolveFunction(defaultFactory(key));
+            if (!key)
+                throw new Error("Tried to resolve " + name(key));
+
+            resolveChain.push(key);
+            try {
+                return verifyType(key, resolveFunction(defaultFactory(key)));
+            } finally{
+                resolveChain.pop();
+            }
         }
 
         function resolveFunction(fn, localKeys, localValues) {
@@ -28,13 +41,13 @@
 
         function defaultFactory(key) {
             if (key instanceof Registration)
-                return key.build(resolve, resolve(scopeFn));
+                return key.build(resolve, scope);
             var injectedFn = resolve.injected(key);
             if (injectedFn)
                 return injectedFn;
-            if (typeof key == 'function')
+            if (isFunction(key))
                 return constructor(key);
-            throw new Error('Failed to resolve ' + name(key));
+            throw new Error('Failed to resolve key ' + name(key) + resolveChainMessage());
         }
 
         function resolveDependencies(required, localKeys, localValues) {
@@ -63,10 +76,18 @@
                 .concat(constant(resolve), constant(scope));
         }
     }, {
-        ctor: ctor,
         resolve: resolveFn,
 
+        ctor: function (dependencies, fn) {
+            if (dependencies.length != fn.length)
+                throw new Error(name(fn) + " has 2 dependencies, but 1 parameter(s)");
+
+            return ctor(dependencies, fn);
+        },
+
         forType: function (type) {
+            if (!isFunction(type))
+                throw new Error("Registration type is not a function");
             return new Registration().forType(type).create(type);
         },
 
@@ -75,6 +96,8 @@
         },
 
         forKey: function (key) {
+            if (typeof key != 'string')
+                throw new Error("Registration key is not a string");
             return new Registration().forKey(key);
         },
 
@@ -108,9 +131,29 @@
         },
 
         named: function (type, key) {
-            return key;
+            return new Registration(ctor([key], pcall(verifyType, type)))
         }
     });
+
+    function verifyType(key, value) {
+        if (notDefined(value))
+            throw new Error(name(key) + " resolved to undefined" + resolveChainMessage());
+        if (value === null)
+            return value;
+        if (isFunction(key) && !(value instanceof key))
+            throw new Error('Value does not inherit from ' + name(key));
+        return value;
+    }
+
+    function resolveChainMessage() {
+        return resolveChain.length > 1
+            ? " while attempting to resolve "
+            + resolveChain
+            .slice(0, -1)
+            .map(name)
+            .join(' -> ')
+            : '';
+    }
 
     function constructor(fn) {
         return ctor(dependencyKeys(fn), variadic(function constructorFn(args) {
@@ -128,18 +171,11 @@
         return ctor.dependencies || [];
     }
 
-    function verifyType(key, value) {
-        if (notDefined(value))
-            throw new Error(name(key) + " resolved to undefined.");
-        return value;
-    }
-
     function name(key) {
-        return key.name
-            || ('' + key);
+        return isFunction(key)
+            ? key.name || "Type"
+            : "'" + key + "'";
     }
-
-    var pcall = variadic(papply);
 
     function papply(fn, args) {
         return variadic(function partial(moreArgs) {
@@ -213,6 +249,9 @@
     }
 
     function ctor(dependencies, fn) {
+        if (dependencies.some(notDefined))
+            throw new Error(name(fn) + " has an undefined dependency");
+
         return extend(fn, { dependencies: dependencies });
     }
 
@@ -245,11 +284,22 @@
         }
     }
 
-    function resolveFn() {
-        throw new Error('inject.resolve can only be used as a dependency');
+    function verifyIsFunction(fn, name) {
+        if (!isFunction(fn))
+            throw new Error(name + " is not a function");
     }
 
-    function scopeFn() {  } // Key for current scope
+    function verifyIsSubType(superType, subType) {
+        if (isFunction(superType) && subType != superType && !(subType.prototype instanceof superType))
+            throw new Error(
+                (subType.name || "Anonymous type")
+                    + " does not inherit from "
+                    + (superType.name || "anonymous base type"));
+    }
+
+    function isFunction(fn) {
+        return typeof fn == 'function';
+    }
 
     function Registration(create) {
         this.factory = create;
@@ -258,6 +308,9 @@
 
     Registration.prototype = {
         forType: chain(function (type) {
+            if (this._constructor)
+                verifyIsSubType(type, this._constructor);
+
             this.key = type;
         }),
 
@@ -266,15 +319,25 @@
         }),
 
         create: chain(function (type) {
+            verifyIsFunction(type, "Type");
+            verifyIsSubType(this.key, type);
+
+            this._constructor = type;
             this.factory = constructor(type);
         }),
 
-        use: chain(function (value){
+        use: chain(function (value) {
+            if (notDefined(value))
+                throw new Error("Value is undefined");
+            verifyType(this.key, value);
+
             this.factory = constant(value);
             this.doNotDispose();
         }),
 
         call: chain(function (fn){
+            verifyIsFunction(fn, "Factory");
+
             this.factory = fn;
         }),
 
@@ -317,6 +380,8 @@
         }),
 
         useParameterHook: chain(function (hook) {
+            verifyIsFunction(hook, 'Parameter hook');
+
             var innerFactory = this.factory;
             this.factory = ctor([resolveFn], function (resolve) {
                 var originalKeys = dependencyKeys(innerFactory);

@@ -673,142 +673,14 @@
                 });
             });
         });
-
-        when("no default lifetime specified", function () {
-            whenNothingIsRegistered(typeIsResolvedToInstancePerContainer);
-            whenTypeIsRegisteredWithDefaultLifetime(typeIsResolvedToInstancePerContainer);
-        });
-
-        when("default lifetime set to instance per container", function () {
-            builder.useInstancePerContainer();
-
-            whenNothingIsRegistered(typeIsResolvedToInstancePerContainer);
-
-            whenTypeIsRegisteredWithDefaultLifetime(typeIsResolvedToInstancePerContainer);
-
-            whenTypeIsRegisteredWithInstancePerDependencyLifetime(typeIsResolvedToInstancePerDependency);
-        });
-
-        when("default lifetime set to instance per dependency", function () {
-            builder.useInstancePerDependency();
-
-            whenNothingIsRegistered(typeIsResolvedToInstancePerDependency);
-
-            whenTypeIsRegisteredWithDefaultLifetime(typeIsResolvedToInstancePerDependency);
-
-            when("type is registered with singleton lifetime", function () {
-                builder.createSingle(type);
-                var sut = builder.build();
-
-                typeIsResolvedToSingleton(sut);
-            });
-        });
-
-        function whenNothingIsRegistered(assert) {
-            when("nothing is registered", function () {
-                var sut = builder.build();
-                assert(sut);
-            });
-        }
-
-        function whenTypeIsRegisteredWithDefaultLifetime(assert) {
-            when("type is registered with default lifetime", function () {
-                builder.create(type);
-                var sut = builder.build();
-
-                assert(sut);
-            });
-        }
-
-        function whenTypeIsRegisteredWithInstancePerDependencyLifetime(assert) {
-            when("type is registered with instance per dependency lifetime", function () {
-                builder.create(type).perDependency();
-                var sut = builder.build();
-
-                assert(sut);
-            });
-        }
-
-        function typeIsResolvedToSingleton(container) {
-            when("resolved twice from same container", function () {
-                var result1 = container.resolve(type);
-                var result2 = container.resolve(type);
-
-                then("same instance returned both times", function () {
-                    result1.should.equal(result2);
-                });
-            });
-
-            when("resolved from outer & inner containers", function () {
-                var inner = container.buildSubContainer();
-                var result1 = container.resolve(type);
-                var result2 = inner.resolve(type);
-
-                then("same instance returned both times", function () {
-                    result1.should.equal(result2);
-                });
-            });
-        }
-
-        function typeIsResolvedToInstancePerContainer(container) {
-            when("resolved twice from same container", sameInstanceReturnedBothTimes(container));
-            
-            when("resolved twice from sub-container", sameInstanceReturnedBothTimes(container.buildSubContainer()));
-
-            when("resolved from outer & inner containers", function () {
-                var inner = container.buildSubContainer();
-                var result1 = container.resolve(type);
-                var result2 = inner.resolve(type);
-
-                then("two separate instances are created", function () {
-                    result1.should.not.equal(result2);
-                });
-            });
-        }
-
-        function sameInstanceReturnedBothTimes(container) {
-            return function() {
-                var result1 = container.resolve(type);
-                var result2 = container.resolve(type);
-
-                then("same instance returned both times", function() {
-                    result1.should.equal(result2);
-                });
-            };
-        }
-
-        function typeIsResolvedToInstancePerDependency(container) {
-            when("resolved twice", differentInstanceReturnedEachTime(container));
-
-            when("resolved twice from sub-container", differentInstanceReturnedEachTime(container.buildSubContainer()));
-        }
-
-        function differentInstanceReturnedEachTime(container) {
-            return function() {
-                var result1 = container.resolve(type);
-                var result2 = container.resolve(type);
-
-                then("two separate instances are created", function() {
-                    result1.should.not.equal(result2);
-                });
-            };
-        }
     });
 
     describe("errors", function () {
         when("container built with nothing registered", function () {
-            var sut = builder.build();
-
-            when("registering another type", function () {
-                var action = (function () { builder.forType(function () { }); });
-
-                it("throws with appropriate message", function () {
-                    action.should.throw('Cannot register anything else once the container has been built');
-                });
-            });
+            var sut = inject();
 
             when("resolving an unregistered name", function () {
-                var action = (function () { sut.resolve('foo'); });
+                var action = (function () { sut('foo'); });
 
                 it("throws with name in message", function () {
                     action.should.throw("Failed to resolve key 'foo'");
@@ -818,16 +690,16 @@
             when("resolving type with an unregistered named dependency", function () {
                 function typeWithNamedDependency(d1) { }
                 typeWithNamedDependency.dependencies = ['unregistered'];
-                var action = function () { sut.resolve(typeWithNamedDependency); };
+                var action = function () { sut(typeWithNamedDependency); };
 
-                it("throws with resolve chain in messsage", function () {
+                it("throws with resolve chain in message", function () {
                     action.should.throw("Failed to resolve key 'unregistered'"
                         + " while attempting to resolve typeWithNamedDependency");
                 });
             });
 
             when("resolving null", function () {
-                var action = function () { sut.resolve(null); };
+                var action = function () { sut(null); };
 
                 it("throws with null in message", function () {
                     action.should.throw("Tried to resolve 'null'");
@@ -835,7 +707,7 @@
             });
 
             then("resolving undefined", function () {
-                var action = function () { sut.resolve(); };
+                var action = function () { sut(); };
 
                 it("throws with undefined in message", function () {
                     action.should.throw("Tried to resolve 'undefined'");
@@ -844,17 +716,17 @@
         });
 
         when("resolving to undefined", function () {
-            builder.forType(type).call(function () { });
-            var action = function () { builder.build().resolve(type); };
+            var sut = inject([inject.forType(type).call(function () { })]);
+            var action = function () { sut(type); };
 
             it("throws with undefined in message", function () {
-                action.should.throw("Failed to resolve type");
+                action.should.throw("type resolved to undefined");
             });
         });
 
         when("resolving to wrong type", function () {
-            builder.forType(type).call(function () { return {}; });
-            var action = function () { builder.build().resolve(type); };
+            var sut = inject([inject.forType(type).call(function () { return {}; })]);
+            var action = function () { sut(type); };
 
             it("throws", function () {
                 action.should.throw('Value does not inherit from type');
@@ -862,8 +734,8 @@
         });
 
         when("resolving named dependency to wrong type", function () {
-            builder.forKey('foo').use({});
-            var action = function () { builder.build().resolve(inject.named(type, 'foo')); };
+            var sut = inject([inject.forKey('foo').use({})]);
+            var action = function () { sut(inject.named(type, 'foo')); };
 
             it("throws", function () {
                 action.should.throw('Value does not inherit from type');
@@ -871,11 +743,13 @@
         });
 
         when("resolving type whose dependency resolves to undefined", function () {
-            builder.forType(dependency1).call(function () { });
-            var action = function () { builder.build().resolve(typeWithDependencies); };
+            var sut = inject([
+                inject.forType(dependency1).call(function () { })
+            ]);
+            var action = function () { sut(typeWithDependencies); };
 
             it("throws with resolve chain in message", function () {
-                action.should.throw("Failed to resolve dependency1"
+                action.should.throw("dependency1 resolved to undefined"
                     + " while attempting to resolve typeWithDependencies");
             });
         });
@@ -884,24 +758,25 @@
             function one(p) { }
             function two(p) { }
             function three(four) { }
-            function four(five) { }
             one.dependencies = [two];
             two.dependencies = ['three'];
+            three.dependencies = ['four'];
 
-            builder.create(three).forKey('three');
-            builder.create(four).forParameter('four');
-            builder.call(function () { }).forParameter('five');
+            var sut = inject([
+                inject.create(three).forKey('three'),
+                inject.call(function () { }).forKey('four')
+            ]);
 
-            var action = function () { builder.build().resolve(one); };
+            var action = function () { sut(one); };
 
             it("throws with each dependency in chain", function () {
-                action.should.throw("Failed to resolve param: 'five'"
-                    + " while attempting to resolve one -> two -> 'three' -> param: 'four'");
+                action.should.throw("'four' resolved to undefined"
+                    + " while attempting to resolve one -> two -> 'three'");
             });
         });
 
         when("registering as non-function type", function () {
-            var action = function () { builder.forType({}); };
+            var action = function () { inject.forType({}); };
 
             it("throws", function () {
                 action.should.throw('Registration type is not a function');
@@ -909,23 +784,15 @@
         });
 
         when("registering as non-string key", function () {
-            var action = function () { builder.forKey({}); };
+            var action = function () { inject.forKey({}); };
 
             it("throws", function () {
                 action.should.throw('Registration key is not a string');
             });
         });
 
-        when("registering as non-string parameter", function () {
-            var action = function () { builder.forParameter({}); };
-
-            it("throws", function () {
-                action.should.throw('Parameter name is not a string');
-            });
-        });
-
         when("configuring type registration", function () {
-            var registration = builder.forType(type);
+            var registration = inject.forType(type);
 
             when("creating a non-function", function () {
                 var action = function () { registration.create('type'); };
@@ -975,91 +842,23 @@
                 });
             });
 
-            when("registering parameter with non-string name", function () {
-                var action = function () { registration.withParameterNamed({}); };
+            when("using parameter hook with non-function", function () {
+                var action = function () { registration.useParameterHook({}); };
 
                 it("throws", function () {
-                    action.should.throw('Parameter name is not a string');
-                });
-            });
-
-            when("registering parameter with non-function type", function () {
-                var action = function () { registration.withParameterTyped({}); };
-
-                it("throws", function () {
-                    action.should.throw('Parameter type is not a function');
-                });
-            });
-
-            when("using parameter hook with non-function matcher", function () {
-                var action = function () { registration.useParameterHook({}, function () { }); };
-
-                it("throws", function () {
-                    action.should.throw('Match callback is not a function');
-                });
-            });
-
-            when("using parameter hook with non-function resolve", function () {
-                var action = function () { registration.useParameterHook(function () { }, {}); };
-
-                it("throws", function () {
-                    action.should.throw('Resolve callback is not a function');
+                    action.should.throw('Parameter hook is not a function');
                 });
             });
         });
 
         when("registering non-subtype for unnamed base type", function () {
             var action = function () {
-                builder.create(function nonSubType() { })
+                inject.create(function nonSubType() { })
                     .forType(function () { });
             };
 
             it("throws with default name in message", function () {
                 action.should.throw('nonSubType does not inherit from anonymous base type');
-            });
-        });
-
-        when("configuring typed parameter registration", function () {
-            var registration = builder.forType(typeWithDependencies).withParameterTyped(dependency1);
-
-            when("creating a non-function type", function () {
-                var action = function () { registration.creating({}); };
-
-                it("throws", function () {
-                    action.should.throw('Type is not a function');
-                });
-            });
-
-            when("creating a non-subtype", function () {
-                var action = function () { registration.creating(function () { }); };
-
-                it("throws", function () {
-                    action.should.throw('Anonymous type does not inherit from dependency1');
-                });
-            });
-
-            when("using an undefined value", function () {
-                var action = function () { registration.using(); };
-
-                it("throws", function () {
-                    action.should.throw('Value is undefined');
-                });
-            });
-
-            when("using value of wrong type", function () {
-                var action = function () { registration.using({}); };
-
-                it("throws", function () {
-                    action.should.throw('Value does not inherit from dependency1');
-                });
-            });
-
-            when("calling a non-function", function () {
-                var action = function () { registration.calling({}); };
-
-                it("throws", function () {
-                    action.should.throw('Factory is not a function');
-                });
             });
         });
 
