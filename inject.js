@@ -5,17 +5,22 @@
     var resolveChain = [];
 
     window.inject = extend(function inject(registrations, parentResolve) {
-        var scope = newScope();
-        var getInjectedFactory = newLookup(registeredKeys(), registeredFactories());
-        var getParentFactory = parentResolve && parentResolve.injected || newLookup([], []);
-        extend(resolve, {
-            injected: resolveInjected,
-            dispose: scope.dispose,
-            function: resolveFunction,
-            defaultFactory: defaultFactory
-        });
-        if (parentResolve) parentResolve(new Registration(constant(resolve)));
-        return resolve;
+        var scope = newScope(),
+            getInjectedFactory = newLookup(registeredKeys(), registeredFactories()),
+            getParentFactory = parentResolve && parentResolve.injected || newLookup([], []);
+
+        return parentResolve
+            ? parentResolve(new Registration(constant(extendedResolve())))
+            : extendedResolve();
+
+        function extendedResolve() {
+            return extend(resolve, {
+                injected: resolveInjected,
+                dispose: scope.dispose,
+                function: resolveFunction,
+                defaultFactory: defaultFactory
+            });
+        }
 
         function resolve(key) {
             if (!key)
@@ -40,9 +45,10 @@
         }
 
         function defaultFactory(key) {
+            var injectedFn = resolve.injected(key);
+
             if (key instanceof Registration)
                 return key.build(resolve, scope);
-            var injectedFn = resolve.injected(key);
             if (injectedFn)
                 return injectedFn;
             if (isFunction(key))
@@ -51,20 +57,16 @@
         }
 
         function resolveDependencies(required, localKeys, localValues) {
-            if (!required.length)
-                return [];
+            var local = newLocalLookup(localKeys, localValues);
 
-            var localIndex = localKeys.indexOf(required[0]);
-            return localIndex >= 0
-                ? [localValues[0]].concat(resolveDependencies(required.slice(1), slicei(localKeys, localIndex), slicei(localValues, localIndex)))
-                : [resolve(required[0])].concat(resolveDependencies(required.slice(1), localKeys, localValues));
+            return required.map(function (key) {
+                return local(key, resolve);
+            });
         }
 
         function registeredKeys() {
             return (registrations || [])
-                .map(function (r) {
-                    return r.key;
-                })
+                .map(function (r) { return r.key; })
                 .concat(resolveFn, scopeFn);
         }
 
@@ -79,15 +81,14 @@
         resolve: resolveFn,
 
         ctor: function (dependencies, fn) {
-            if (dependencies.length != fn.length)
-                throw new Error(name(fn) + " has 2 dependencies, but 1 parameter(s)");
+            verifyArity(dependencies, fn);
 
             return ctor(dependencies, fn);
         },
 
         forType: function (type) {
-            if (!isFunction(type))
-                throw new Error("Registration type is not a function");
+            verifyIsFunction(type, "Registration type");
+
             return new Registration().forType(type).create(type);
         },
 
@@ -135,23 +136,13 @@
         }
     });
 
-    function verifyType(key, value) {
-        if (notDefined(value))
-            throw new Error(name(key) + " resolved to undefined" + resolveChainMessage());
-        if (value === null)
-            return value;
-        if (isFunction(key) && !(value instanceof key))
-            throw new Error('Value does not inherit from ' + name(key));
-        return value;
-    }
-
     function resolveChainMessage() {
         return resolveChain.length > 1
             ? " while attempting to resolve "
             + resolveChain
-            .slice(0, -1)
-            .map(name)
-            .join(' -> ')
+                .slice(0, -1)
+                .map(name)
+                .join(' -> ')
             : '';
     }
 
@@ -159,12 +150,6 @@
         return ctor(dependencyKeys(fn), variadic(function constructorFn(args) {
             return new (Function.prototype.bind.apply(fn, [null].concat(args)));
         }));
-    }
-
-    function slicei(array, index) {
-        return array.filter(function (_, i) {
-            return i != index;
-        });
     }
 
     function dependencyKeys(ctor) {
@@ -194,9 +179,7 @@
                     var value = resolveForKey();
                     keys.push(key);
                     values.push(value);
-                    if (value && 'dispose' in value)
-                        value.dispose = decorate(value.dispose, pcall(lookup.remove, value));
-                    return value;
+                    return disposable(value);
                 });
             }, {
                 dispose: function () {
@@ -206,6 +189,20 @@
                     });
                 }
         });
+
+        function disposable(value) {
+            if (value && 'dispose' in value)
+                value.dispose = decorate(value.dispose, pcall(lookup.remove, value));
+            return value;
+        }
+    }
+
+    function newLocalLookup(keys, values) {
+        return function localLookup(key, fallback) {
+            var i = keys.indexOf(key);
+            return i < 0 ? fallback(key)
+                : (keys.splice(i, 1), values.splice(i, 1)[0]);
+        }
     }
 
     function newLookup(keys, values) {
@@ -232,14 +229,6 @@
         return notDefined(arg)
             ? defaultValue
             : arg;
-    }
-
-    function notDefined(value) {
-        return !isDefined(value)
-    }
-
-    function isDefined(value) {
-        return typeof value != 'undefined';
     }
 
     function constant(value) {
@@ -284,6 +273,16 @@
         }
     }
 
+    function verifyType(key, value) {
+        if (notDefined(value))
+            throw new Error(name(key) + " resolved to undefined" + resolveChainMessage());
+        if (value === null)
+            return value;
+        if (isFunction(key) && !(value instanceof key))
+            throw new Error('Value does not inherit from ' + name(key));
+        return value;
+    }
+
     function verifyIsFunction(fn, name) {
         if (!isFunction(fn))
             throw new Error(name + " is not a function");
@@ -297,8 +296,25 @@
                     + (superType.name || "anonymous base type"));
     }
 
+    function verifyArity(dependencies, fn) {
+        if (dependencies.length != fn.length)
+        {
+            var dependenciesMsg = dependencies.length == 1 ? "1 dependency" : dependencies.length + " dependencies",
+                paramsMsg = fn.length == 1 ? "1 parameter" : fn.length + " parameters";
+            throw new Error(name(fn) + " has " + dependenciesMsg + ", but " + paramsMsg);
+        }
+    }
+
     function isFunction(fn) {
         return typeof fn == 'function';
+    }
+
+    function notDefined(value) {
+        return !isDefined(value)
+    }
+
+    function isDefined(value) {
+        return typeof value != 'undefined';
     }
 
     function Registration(create) {

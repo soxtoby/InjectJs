@@ -883,12 +883,14 @@
         }
 
         when("specifying wrong number of dependencies", function () {
-            var action = function () {
-                inject.ctor(['foo', 'bar'], function (baz) { });
-            };
-
             it("throws", function () {
-                action.should.throw('Type has 2 dependencies, but 1 parameter(s)');
+                (function () {
+                    inject.ctor(['foo', 'bar'], function (baz) { });
+                }).should.throw("Type has 2 dependencies, but 1 parameter");
+
+                (function () {
+                    inject.ctor(['foo'], function () { });
+                }).should.throw("Type has 1 dependency, but 0 parameters")
             });
         });
     });
