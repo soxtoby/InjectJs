@@ -232,15 +232,49 @@
                     });
                 });
             });
+
+            when("function resolved for key", function() {
+                var expectedResult = 'baz';
+                var func = sinon.stub();
+                func.dependencies = [dependency1, dependency2];
+                func.returns(expectedResult);
+                var chain = registration.resolveFunction(func);
+
+                it("can be chained", function() {
+                    chain.should.equal(registration);
+                });
+
+                when("resolving key", function() {
+                    var result = inject([registration])('named');
+
+                    then("result is a function", function() {
+                        result.should.be.a('function');
+                    });
+
+                    when("result is called", function() {
+                        var resultResult = result('foo', 'bar');
+
+                        then("function is called with dependencies and passed in arguments", function() {
+                            var args = func.firstCall.args;
+                            args[0].should.be.an.instanceOf(dependency1);
+                            args[1].should.be.an.instanceOf(dependency2);
+                            args[2].should.equal('foo');
+                            args[3].should.equal('bar');
+                        });
+
+                        it("returns function return value", function() {
+                            resultResult.should.equal(expectedResult);
+                        });
+                    });
+                });
+            });
         });
 
         when("registering a constructor", function () {
             var registration = inject.create(type);
             var sut = inject([registration]);
 
-            then("registration is returned", function () {
-                registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
-            });
+            isARegistration(registration);
 
             when("type is resolved", function () {
                 var result = sut(type);
@@ -255,9 +289,7 @@
             var registration = inject.createSingle(type);
             var sut = inject([registration]);
 
-            then("registration is returned", function () {
-                registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
-            });
+            isARegistration(registration);
 
             when("resolving type twice", function () {
                 var result1 = sut(type);
@@ -270,12 +302,10 @@
         });
 
         when("registering a factory method", function () {
-            var expectedResult;
-            var registration = inject.call(function () { return expectedResult; });
+            var factory = sinon.stub();
+            var registration = inject.factory(factory);
 
-            then("registration is returned", function () {
-                registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
-            });
+            isARegistration(registration);
 
             when("registration is set up for type", function () {
                 var chain = registration.forType(type);
@@ -285,17 +315,23 @@
                     chain.should.equal(registration);
                 });
 
-                when("factory returns type instance & type is resolved", function () {
-                    expectedResult = new type();
+                when("factory returns instance of type & type is resolved", function () {
+                    var expectedResult = new type();
+                    factory.returns(expectedResult);
+                    factory.dependencies = [dependency1]
                     var result = sut(type);
 
                     then("type resolves to factory return value", function () {
                         result.should.equal(expectedResult);
                     });
+
+                    then("factory dependencies are passed in", function() {
+                        factory.firstCall.args[0].should.be.an.instanceOf(dependency1);
+                    });
                 });
 
                 when("factory returns null & type is resolved", function () {
-                    expectedResult = null;
+                    factory.returns(null);
                     var result = sut(type);
 
                     then("type resolves to null", function () {
@@ -307,11 +343,9 @@
 
         when("registering a value", function () {
             var value = {};
-            var registration = inject.use(value);
+            var registration = inject.value(value);
 
-            then("registration is returned", function () {
-                registration.should.be.an.instanceOf(Injection.RegistrationBuilder);
-            });
+            isARegistration(registration);
 
             when("registration is set up for key", function () {
                 var chain = registration.forKey('key');
@@ -332,7 +366,7 @@
         });
 
         when("registering a null value for a type", function () {
-            var registration = inject.use(null).forType(type);
+            var registration = inject.value(null).forType(type);
 
             when("type is resolved", function () {
                 var result = inject([registration])(type);
@@ -358,6 +392,47 @@
                 });
             });
         });
+
+        when("registering a function", function() {
+            var expectedResult = 'baz';
+            var func = sinon.stub();
+            func.dependencies = [dependency1, dependency2];
+            func.returns(expectedResult);
+            var registration = inject.function(func);
+
+            isARegistration(registration);
+
+            when("registration is set up for key", function() {
+                registration.forKey('key');
+                var sut = inject([registration]);
+
+                when("key is resolved", function() {
+                    var result = sut('key');
+
+                    when("result is called", function() {
+                        var resultResult = result('foo', 'bar');
+
+                        then("function is called with dependencies and passed in arguments", function() {
+                            var args = func.firstCall.args;
+                            args[0].should.be.an.instanceOf(dependency1);
+                            args[1].should.be.an.instanceOf(dependency2);
+                            args[2].should.equal('foo');
+                            args[3].should.equal('bar');
+                        });
+
+                        it("returns function return value", function() {
+                            resultResult.should.equal(expectedResult);
+                        });
+                    });
+                });
+            });
+        });
+
+        function isARegistration(registration) {
+            then("registration is returned", function() {
+                registration.should.respondTo('build');
+            });
+        }
     });
 
     describe("parameter registration", function () {
@@ -561,14 +636,14 @@
             var outerDependency2 = new dependency2();
             var outer = inject([
                 inject.createSingle(typeWithDependencies),
-                inject.use(outerDependency1).forType(dependency1),
-                inject.use(outerDependency2).forType(dependency2)
+                inject.value(outerDependency1).forType(dependency1),
+                inject.value(outerDependency2).forType(dependency2)
             ]);
 
             when("resolved from an inner container", function() {
                 var inner = inject([
-                    inject.use(new dependency1()).forType(dependency1),
-                    inject.use(new dependency2()).forType(dependency2)
+                    inject.value(new dependency1()).forType(dependency1),
+                    inject.value(new dependency2()).forType(dependency2)
                 ], outer);
 
                 var result = inner(typeWithDependencies);
@@ -764,7 +839,7 @@
 
             var sut = inject([
                 inject.create(three).forKey('three'),
-                inject.call(function () { }).forKey('four')
+                inject.factory(function () { }).forKey('four')
             ]);
 
             var action = function () { sut(one); };
@@ -839,6 +914,14 @@
 
                 it("throws", function () {
                     action.should.throw('Factory is not a function');
+                });
+            });
+
+            when("resolving to a function", function() {
+                var action = function () { registration.resolveFunction(function () { }) };
+
+                it("throws", function() {
+                    action.should.throw("A type cannot be resolved to a function");
                 });
             });
 

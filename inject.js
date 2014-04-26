@@ -106,12 +106,16 @@
             return inject.create(type).once();
         },
 
-        call: function (fn) {
+        factory: function (fn) {
             return new Registration(fn);
         },
 
-        use: function (value) {
+        value: function (value) {
             return new Registration(constant(value));
+        },
+
+        function: function (fn) {
+            return new Registration().resolveFunction(fn);
         },
 
         func: function (key, funcDependencies) {
@@ -318,7 +322,8 @@
     }
 
     function Registration(create) {
-        this.factory = create;
+        if (isDefined(create))
+            this.call(create);
         this.perContainer();
     }
 
@@ -351,10 +356,22 @@
             this.doNotDispose();
         }),
 
-        call: chain(function (fn){
+        call: chain(function (fn) {
             verifyIsFunction(fn, "Factory");
 
             this.factory = fn;
+        }),
+
+        resolveFunction: chain(function (fn) {
+            verifyIsFunction(fn);
+            if (isFunction(this.key))
+                throw new Error("A type cannot be resolved to a function");
+
+            this.factory = ctor(dependencyKeys(fn), variadic(function (dependencies) {
+                return variadic(function (args) {
+                    return fn.apply(this, dependencies.concat(args));
+                });
+            }));
         }),
 
         once: chain(function () {
