@@ -271,7 +271,7 @@
         });
 
         when("registering a constructor", function () {
-            var registration = inject.create(type);
+            var registration = inject.type(type);
             var sut = inject([registration]);
 
             isARegistration(registration);
@@ -286,7 +286,7 @@
         });
 
         when("registering constructor as a singleton", function () {
-            var registration = inject.createSingle(type);
+            var registration = inject.single(type);
             var sut = inject([registration]);
 
             isARegistration(registration);
@@ -381,7 +381,7 @@
             var callback = sinon.spy(function (o) {
                 o.callbackProperty = true;
             });
-            var registration = inject.create(type).then(callback);
+            var registration = inject.type(type).then(callback);
             var sut = inject([registration]);
 
             when("type is resolved", function () {
@@ -599,9 +599,9 @@
         });
 
         when("registered as singleton in inner container", function () {
-            var registration = inject.create(disposableType).perDependency();
+            var registration = inject.type(disposableType).perDependency();
             var outer = inject([registration]);
-            var inner = inject([inject.createSingle(disposableType)], outer);
+            var inner = inject([inject.single(disposableType)], outer);
 
             when("resolved from outer container twice", function () {
                 var result1 = outer(disposableType);
@@ -635,7 +635,7 @@
             var outerDependency1 = new dependency1();
             var outerDependency2 = new dependency2();
             var outer = inject([
-                inject.createSingle(typeWithDependencies),
+                inject.single(typeWithDependencies),
                 inject.value(outerDependency1).forType(dependency1),
                 inject.value(outerDependency2).forType(dependency2)
             ]);
@@ -838,7 +838,7 @@
             three.dependencies = ['four'];
 
             var sut = inject([
-                inject.create(three).forKey('three'),
+                inject.type(three).forKey('three'),
                 inject.factory(function () { }).forKey('four')
             ]);
 
@@ -873,7 +873,7 @@
                 var action = function () { registration.create('type'); };
 
                 it("throws", function () {
-                    action.should.throw('Type is not a function');
+                    action.should.throw('Constructor is not a function');
                 });
             });
 
@@ -934,14 +934,74 @@
             });
         });
 
-        when("registering non-subtype for unnamed base type", function () {
-            var action = function () {
-                inject.create(function nonSubType() { })
-                    .forType(function () { });
-            };
+        when("configuring a value registration", function() {
+            var registration = inject.value({});
 
-            it("throws with default name in message", function () {
-                action.should.throw('nonSubType does not inherit from anonymous base type');
+            when("registering for non-base type", function() {
+                var action = function () { registration.forType(function nonBaseType() { }); };
+
+                it("throws", function() {
+                    action.should.throw("Value does not inherit from nonBaseType");
+                });
+            });
+
+            when("registering for non-string key", function() {
+                var action = function () { registration.forKey({}); };
+
+                it("throws", function() {
+                    action.should.throw("Registration key is not a string");
+                });
+            });
+        });
+
+        when("configuring function registration", function() {
+            var registration = inject.function(function () { });
+
+            when("registering for type", function() {
+                var action = function () { registration.forType(type); };
+
+                it("throws", function() {
+                    action.should.throw("A type cannot be resolved to a function");
+                });
+            });
+        });
+
+        when("configuring constructor registration", function() {
+            var registration = inject.type(function nonSubType() { });
+
+            when("registering for non-base type", function() {
+                var action = function () { registration.forType(function () { }); };
+
+                it("throws", function() {
+                    action.should.throw("nonSubType does not inherit from anonymous base type");
+                });
+            });
+        });
+
+        when("registering a typed parameter with wrong type", function() {
+            var registration = inject.forKey('foo');
+            var action = function () { registration.withDependency(type, {}); };
+
+            it("throws", function() {
+                action.should.throw("Value does not inherit from type");
+            });
+        });
+
+        when("injecting a registration with no factory", function() {
+            var registration = inject.forKey('foo');
+            var action = function () { inject([registration]); };
+
+            it("throws", function() {
+                action.should.throw("No factory defined for 'foo' registration");
+            });
+        });
+
+        when("injecting a registration with no key", function() {
+            var registration = inject.value({});
+            var action = function () { inject([registration]); };
+
+            it("throws", function() {
+                action.should.throw("No key defined for registration");
             });
         });
 

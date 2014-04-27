@@ -10,7 +10,7 @@
             getParentFactory = parentResolve && parentResolve.injected || newLookup([], []);
 
         return parentResolve
-            ? parentResolve(new Registration(constant(extendedResolve())))
+            ? parentResolve(new Registration(constant(extendedResolve()), null))
             : extendedResolve();
 
         function extendedResolve() {
@@ -28,14 +28,16 @@
 
             resolveChain.push(key);
             try {
-                return verifyType(key, resolveFunction(defaultFactory(key)));
-            } finally{
+                return verifyType(key, resolveFunction(defaultFactory(key))());
+            } finally {
                 resolveChain.pop();
             }
         }
 
         function resolveFunction(fn, localKeys, localValues) {
-            return fn.apply(this, resolveDependencies(dependencyKeys(fn), localKeys || [], localValues || []));
+            return variadic(function (args) {
+                return fn.apply(this, resolveDependencies(dependencyKeys(fn), localKeys || [], localValues || []).concat(args));
+            });
         }
 
         function resolveInjected(key, fallback) {
@@ -66,7 +68,9 @@
 
         function registeredKeys() {
             return (registrations || [])
-                .map(function (r) { return r.key; })
+                .map(function (r) {
+                    return r.key();
+                })
                 .concat(resolveFn, scopeFn);
         }
 
@@ -87,23 +91,20 @@
         },
 
         forType: function (type) {
-            verifyIsFunction(type, "Registration type");
+            return inject.type(type);
+        },
 
+        type: function (type) {
+            verifyIsFunction(type, "Registration type")
             return new Registration().forType(type).create(type);
         },
 
-        create: function (type) {
-            return inject.forType(type);
-        },
-
         forKey: function (key) {
-            if (typeof key != 'string')
-                throw new Error("Registration key is not a string");
             return new Registration().forKey(key);
         },
 
-        createSingle: function (type) {
-            return inject.create(type).once();
+        single: function (type) {
+            return inject.forType(type).once();
         },
 
         factory: function (fn) {
@@ -111,7 +112,7 @@
         },
 
         value: function (value) {
-            return new Registration(constant(value));
+            return new Registration().use(value);
         },
 
         function: function (fn) {
@@ -121,29 +122,30 @@
         func: function (key, funcDependencies) {
             // TODO should be perDependency
             return new Registration(ctor([resolveFn], function (resolve) {
-                return variadic(function(args) {
-                    return resolve.function(resolve.defaultFactory(key), funcDependencies, args);
+                return variadic(function (args) {
+                    return resolve.function(resolve.defaultFactory(key), funcDependencies, args)();
                 });
-            }));
+            }), null);
         },
 
         optional: function (key, defaultValue) {
             return new Registration(ctor([resolveFn], function (resolve) {
                 var defaultValueFactory = constant(defaultArg(defaultValue, null));
                 return resolve.function(
-                    resolve.injected(key, constant(defaultValueFactory)));
-            }));
+                        resolve.injected(key, constant(defaultValueFactory)))
+                    ();
+            }), null);
         },
 
         named: function (type, key) {
-            return new Registration(ctor([key], pcall(verifyType, type)))
+            return new Registration(ctor([key], pcall(verifyType, type)), null)
         }
     });
 
     function resolveChainMessage() {
         return resolveChain.length > 1
             ? " while attempting to resolve "
-            + resolveChain
+                + resolveChain
                 .slice(0, -1)
                 .map(name)
                 .join(' -> ')
@@ -179,7 +181,7 @@
 
         return extend(
             function scope(key, resolveForKey) {
-                return lookup(key, function() {
+                return lookup(key, function () {
                     var value = resolveForKey();
                     keys.push(key);
                     values.push(value);
@@ -192,11 +194,11 @@
                             value.dispose();
                     });
                 }
-        });
+            });
 
         function disposable(value) {
             if (value && 'dispose' in value)
-                value.dispose = decorate(value.dispose, pcall(lookup.remove, value));
+                value.dispose = compose(value.dispose, pcall(lookup.remove, value));
             return value;
         }
     }
@@ -249,15 +251,14 @@
     }
 
     function chain(fn) {
-        return decorate(fn, function() {
+        return compose(fn, function () {
             return this;
         });
     }
 
-    function decorate(fn, decoration) {
-        return function decorated() {
-            var result = fn.apply(this, arguments);
-            return decoration.call(this, result);
+    function compose(f, g) {
+        return function composed() {
+            return g.call(this, f.apply(this, arguments));
         };
     }
 
@@ -292,17 +293,8 @@
             throw new Error(name + " is not a function");
     }
 
-    function verifyIsSubType(superType, subType) {
-        if (isFunction(superType) && subType != superType && !(subType.prototype instanceof superType))
-            throw new Error(
-                (subType.name || "Anonymous type")
-                    + " does not inherit from "
-                    + (superType.name || "anonymous base type"));
-    }
-
     function verifyArity(dependencies, fn) {
-        if (dependencies.length != fn.length)
-        {
+        if (dependencies.length != fn.length) {
             var dependenciesMsg = dependencies.length == 1 ? "1 dependency" : dependencies.length + " dependencies",
                 paramsMsg = fn.length == 1 ? "1 parameter" : fn.length + " parameters";
             throw new Error(name(fn) + " has " + dependenciesMsg + ", but " + paramsMsg);
@@ -321,130 +313,157 @@
         return typeof value != 'undefined';
     }
 
-    function Registration(create) {
-        if (isDefined(create))
-            this.call(create);
-        this.perContainer();
+    function Registration(factory, key) {
+        var self = this,
+            _key = key,
+            _factory,
+            _lifeTime,
+            _constructor,
+            _value,
+            _function;
+
+        extend(self, {
+            key: function () { return _key; },
+
+            forType: chain(function (type) {
+                _key = defaultArg(type, null);
+                validate();
+            }),
+
+            forKey: chain(function (key) {
+                if (typeof key != 'string')
+                    throw new Error("Registration key is not a string");
+
+                _key = key;
+                validate();
+            }),
+
+            create: chain(function (type) {
+                _constructor = defaultArg(type, null);
+                _factory = constructor(type);
+
+                validate();
+            }),
+
+            use: chain(function (value) {
+                if (notDefined(value))
+                    throw new Error("Value is undefined");
+
+                _value = value;
+                _factory = _lifeTime = constant(defaultArg(value, null));
+
+                validate();
+            }),
+
+            call: chain(function (fn) {
+                _factory = defaultArg(fn, null);
+                validate();
+            }),
+
+            resolveFunction: chain(function (fn) {
+                _function = fn;
+                _factory = ctor([resolveFn], function (resolve) {
+                    return resolve.function(fn);
+                });
+
+                validate();
+            }),
+
+            once: chain(function () {
+                _lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
+                    return registeredScope(_key, registeredResolve.function(factory));
+                };
+            }),
+
+            perContainer: chain(function () {
+                _lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
+                    return currentScope(_key, resolve.function(factory));
+                };
+            }),
+
+            perDependency: chain(function () {
+                _lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
+                    return currentScope(null, resolve.function(factory));
+                };
+            }),
+
+            then: chain(function (callback) {
+                _factory = ctor(dependencyKeys(_factory),
+                    compose(_factory, function (value) {
+                        callback(value);
+                        return value;
+                    }));
+            }),
+
+            useParameterHook: chain(function (hook) {
+                verifyIsFunction(hook, 'Parameter hook');
+
+                var innerFactory = _factory;
+                _factory = ctor([resolveFn], function (resolve) {
+                    var originalKeys = dependencyKeys(innerFactory);
+                    var hookedKeys = originalKeys.map(function (key) {
+                        var hookValue = hook(resolve, key);
+                        return isDefined(hookValue)
+                            ? new Registration(constant(hookValue), null)
+                            : key;
+                    });
+
+                    return resolve.function(ctor(hookedKeys, pcall(innerFactory)))();
+                });
+            }),
+
+            withDependency: chain(function (key, value) {
+                verifyType(key, value);
+
+                self.useParameterHook(function (resolve, paramKey) {
+                    if (paramKey === key) return value;
+                });
+            }),
+
+            withArguments: chain(variadic(function (args) {
+                _factory = ctor(
+                    dependencyKeys(_factory).slice(args.length),
+                    papply(_factory, args));
+            })),
+
+            build: function (registeredResolve, registeredScope) {
+                if (notDefined(_key))
+                    throw new Error("No key defined for registration");
+                if (notDefined(_factory))
+                    throw new Error("No factory defined for " + name(_key) + " registration");
+
+                return ctor([resolveFn, scopeFn],
+                    pcall(_lifeTime, _factory, registeredResolve, registeredScope));
+            }
+        });
+
+        function validate() {
+            if (isDefined(_constructor)) {
+                verifyIsFunction(_constructor, "Constructor");
+                if (isFunction(_key) && _constructor != _key && !(_constructor.prototype instanceof _key))
+                    throw new Error(
+                        (_constructor.name || "Anonymous type")
+                            + " does not inherit from "
+                            + (_key.name || "anonymous base type"));
+            }
+
+            if (isDefined(_value) && isFunction(_key))
+                verifyType(_key, _value);
+
+            if (isDefined(_function)) {
+                verifyIsFunction(_function);
+                if (isFunction(_key))
+                    throw new Error("A type cannot be resolved to a function");
+            }
+
+            if (isDefined(_factory))
+                verifyIsFunction(_factory, "Factory");
+        }
+
+        if (isDefined(factory))
+            self.call(factory);
+        self.perContainer();
     }
 
-    Registration.prototype = {
-        forType: chain(function (type) {
-            if (this._constructor)
-                verifyIsSubType(type, this._constructor);
-
-            this.key = type;
-        }),
-
-        forKey: chain(function (key) {
-            this.key = key;
-        }),
-
-        create: chain(function (type) {
-            verifyIsFunction(type, "Type");
-            verifyIsSubType(this.key, type);
-
-            this._constructor = type;
-            this.factory = constructor(type);
-        }),
-
-        use: chain(function (value) {
-            if (notDefined(value))
-                throw new Error("Value is undefined");
-            verifyType(this.key, value);
-
-            this.factory = constant(value);
-            this.doNotDispose();
-        }),
-
-        call: chain(function (fn) {
-            verifyIsFunction(fn, "Factory");
-
-            this.factory = fn;
-        }),
-
-        resolveFunction: chain(function (fn) {
-            verifyIsFunction(fn);
-            if (isFunction(this.key))
-                throw new Error("A type cannot be resolved to a function");
-
-            this.factory = ctor(dependencyKeys(fn), variadic(function (dependencies) {
-                return variadic(function (args) {
-                    return fn.apply(this, dependencies.concat(args));
-                });
-            }));
-        }),
-
-        once: chain(function () {
-            var key = this.key;
-            this._lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
-                return registeredScope(key, pcall(registeredResolve.function, factory));
-            };
-        }),
-
-        perContainer: chain(function () {
-            var key = this.key;
-            this._lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
-                return currentScope(key, pcall(resolve.function, factory));
-            };
-        }),
-
-        perDependency: chain(function () {
-            this._lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
-                return currentScope(null, pcall(resolve.function, factory));
-            };
-        }),
-
-        doNotDispose: chain(function () {
-            var innerLifetime = this._lifeTime;
-            this._lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
-                return innerLifetime(
-                        function () { return constant(resolve.function(factory)); },
-                        registeredResolve, registeredScope, resolve, currentScope)
-                    ();
-            };
-        }),
-
-        then: chain(function (callback) {
-            this.factory = ctor(dependencyKeys(this.factory),
-                decorate(this.factory, function (value) {
-                    callback(value);
-                    return value;
-                }));
-        }),
-
-        useParameterHook: chain(function (hook) {
-            verifyIsFunction(hook, 'Parameter hook');
-
-            var innerFactory = this.factory;
-            this.factory = ctor([resolveFn], function (resolve) {
-                var originalKeys = dependencyKeys(innerFactory);
-                var hookedKeys = originalKeys.map(function (key) {
-                    var hookValue = hook(resolve, key);
-                    return isDefined(hookValue)
-                        ? new Registration(constant(hookValue))
-                        : key;
-                });
-
-                return resolve.function(ctor(hookedKeys, pcall(innerFactory)));
-            });
-        }),
-
-        withDependency: function(key, value) {
-            return this.useParameterHook(function (resolve, paramKey) {
-                if (paramKey == key) return value;
-            });
-        },
-
-        withArguments: chain(variadic(function (args) {
-            this.factory = ctor(
-                dependencyKeys(this.factory).slice(args.length),
-                papply(this.factory, args));
-        })),
-
-        build: function (registeredResolve, registeredScope) {
-            return ctor([resolveFn, scopeFn],
-                pcall(this._lifeTime, this.factory, registeredResolve, registeredScope));
-        }
-    };
     window.Injection = { RegistrationBuilder: Registration }; // TODO remove, just for old tests
 })();
