@@ -748,6 +748,30 @@
                 });
             });
         });
+
+        when("factory function resolved", function() {
+            var funcDef = inject.func(disposableType);
+            var sut = inject();
+            var func = sut(funcDef);
+
+            when("factory function called twice", function() {
+                var result1 = func();
+                var result2 = func();
+
+                it("returns separate instances", function() {
+                    result1.should.not.equal(result2);
+                });
+
+                when("container disposed", function() {
+                    sut.dispose();
+
+                    then("both instances are disposed", function() {
+                        result1.disposeMethod.should.have.been.called;
+                        result2.disposeMethod.should.have.been.called;
+                    });
+                });
+            });
+        });
     });
 
     describe("errors", function () {

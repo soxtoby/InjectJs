@@ -122,10 +122,9 @@
         },
 
         func: function (key, funcDependencies) {
-            // TODO should be perDependency
-            return new Registration(dependant([resolveFn], function (resolve) {
+            return new Registration(dependant([resolveFn, scopeFn], function (resolve, scope) {
                 return variadic(function (args) {
-                    return resolve.function(resolve.defaultFactory(key), funcDependencies, args)();
+                    return scope(null, resolve.function(resolve.defaultFactory(key), funcDependencies, args));
                 });
             }), null);
         },
