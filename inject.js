@@ -1,7 +1,8 @@
 ﻿(function () {
     var resolveFn = 'inject.resolveFn';
     var scopeFn = 'inject.scope'; // Key for current scope
-    var pcall = variadic(papply);
+    var _call = variadic(_apply);
+    var call_ = variadic(apply_);
     var resolveChain = [];
 
     window.inject = extend(function inject(registrations, parentResolve) {
@@ -43,7 +44,7 @@
         function resolveInjected(key, fallback) {
             return getInjectedFactory(key, function () {
                 return getParentFactory(key, fallback);
-            })
+            });
         }
 
         function defaultFactory(key) {
@@ -67,18 +68,16 @@
         }
 
         function registeredKeys() {
-            return (registrations || [])
-                .map(function (r) {
-                    return r.key();
-                })
+            return flatMap(
+                    registrations || [],
+                    function (r) { return r.keys(); })
                 .concat(resolveFn, scopeFn);
         }
 
         function registeredFactories() {
-            return (registrations || [])
-                .map(function (r) {
-                    return r.build(resolve, scope);
-                })
+            return flatMap(
+                    registrations || [],
+                    function (r) { return repeat(r.build(resolve, scope), r.keys().length); })
                 .concat(constant(resolve), constant(scope));
         }
     }, {
@@ -93,12 +92,13 @@
         },
 
         forType: function (type) {
-            return inject.type(type);
+            verifyIsFunction(type, "Registration type");
+            return new Registration().forType(type);
         },
 
         type: function (type) {
-            verifyIsFunction(type, "Registration type")
-            return new Registration().forType(type).create(type);
+            verifyIsFunction(type, "Registration type");
+            return new Registration().create(type);
         },
 
         forKey: function (key) {
@@ -106,7 +106,7 @@
         },
 
         single: function (type) {
-            return inject.forType(type).once();
+            return inject.forType(type).create(type).once();
         },
 
         factory: function (fn) {
@@ -139,13 +139,13 @@
         },
 
         named: function (type, key) {
-            return new Registration(dependant([key], pcall(verifyType, type)), null)
+            return new Registration(dependant([key], _call(verifyType, type)), null);
         }
     });
 
     function Registration(factory, key) {
         var self = this,
-            _key = key,
+            _keys = isDefined(key) ? [key] : [],
             _factory,
             _lifeTime,
             _constructor,
@@ -153,10 +153,14 @@
             _function;
 
         extend(self, {
-            key: function () { return _key; },
+            keys: function() {
+                return !_keys.length && _constructor
+                    ? [_constructor]
+                    : _keys;
+            },
 
             forType: chain(function (type) {
-                _key = defaultArg(type, null);
+                _keys.push(type);
                 validate();
             }),
 
@@ -164,7 +168,7 @@
                 if (typeof key != 'string')
                     throw new Error("Registration key is not a string");
 
-                _key = key;
+                _keys.push(key);
                 validate();
             }),
 
@@ -201,13 +205,13 @@
 
             once: chain(function () {
                 _lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
-                    return registeredScope(_key, registeredResolve.function(factory));
+                    return registeredScope(self.keys()[0], registeredResolve.function(factory));
                 };
             }),
 
             perContainer: chain(function () {
                 _lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
-                    return currentScope(_key, resolve.function(factory));
+                    return currentScope(self.keys()[0], resolve.function(factory));
                 };
             }),
 
@@ -238,7 +242,7 @@
                             : key;
                     });
 
-                    return resolve.function(dependant(hookedKeys, pcall(innerFactory)))();
+                    return resolve.function(dependant(hookedKeys, _call(innerFactory)))();
                 });
             }),
 
@@ -253,36 +257,40 @@
             withArguments: chain(variadic(function (args) {
                 _factory = dependant(
                     dependencyKeys(_factory).slice(args.length),
-                    papply(_factory, args));
+                    _apply(_factory, args));
             })),
 
             build: function (registeredResolve, registeredScope) {
-                if (notDefined(_key))
+                if (!self.keys().length)
                     throw new Error("No key defined for registration");
                 if (notDefined(_factory))
-                    throw new Error("No factory defined for " + name(_key) + " registration");
+                    throw new Error("No factory defined for " + name(self.keys()[0]) + " registration");
 
                 return dependant([resolveFn, scopeFn],
-                    pcall(_lifeTime, _factory, registeredResolve, registeredScope));
+                    _call(_lifeTime, defaultArg(_factory, _constructor), registeredResolve, registeredScope));
             }
         });
 
         function validate() {
             if (isDefined(_constructor)) {
                 verifyIsFunction(_constructor, "Constructor");
-                if (isFunction(_key) && _constructor != _key && !(_constructor.prototype instanceof _key))
-                    throw new Error(
-                        (_constructor.name || "Anonymous type")
-                            + " does not inherit from "
-                            + (_key.name || "anonymous base type"));
+                self.keys().forEach(function (key) {
+                    if (isFunction(key) && _constructor != key && !(_constructor.prototype instanceof key))
+                        throw new Error(
+                            (_constructor.name || "Anonymous type")
+                                + " does not inherit from "
+                                + (key.name || "anonymous base type"));
+                });
             }
 
-            if (isDefined(_value) && isFunction(_key))
-                verifyType(_key, _value);
+            if (isDefined(_value))
+                self.keys()
+                    .filter(isFunction)
+                    .forEach(unary(call_(verifyType, _value)));
 
             if (isDefined(_function)) {
                 verifyIsFunction(_function);
-                if (isFunction(_key))
+                if (self.keys().some(isFunction))
                     throw new Error("A type cannot be resolved to a function");
             }
 
@@ -339,7 +347,7 @@
 
         function disposable(value) {
             if (value && 'dispose' in value)
-                value.dispose = compose(value.dispose, pcall(lookup.remove, value));
+                value.dispose = compose(value.dispose, _call(lookup.remove, value));
             return value;
         }
     }
@@ -349,7 +357,7 @@
             var i = keys.indexOf(key);
             return i < 0 ? fallback(key)
                 : (keys.splice(i, 1), values.splice(i, 1)[0]);
-        }
+        };
     }
 
     function newLookup(keys, values) {
@@ -439,9 +447,26 @@
         return obj;
     }
 
-    function papply(fn, args) {
+    function repeat(value, times) {
+        var array = [];
+        while (times--)
+            array.push(value);
+        return array;
+    }
+
+    function flatMap(array, mapFn) {
+        return Array.prototype.concat.apply([], array.map(mapFn));
+    }
+
+    function _apply(fn, args) {
         return variadic(function partial(moreArgs) {
             return fn.apply(this, args.concat(moreArgs));
+        });
+    }
+
+    function apply_(fn, args) {
+        return variadic(function partial(moreArgs) {
+            return fn.apply(this, moreArgs.concat(args));
         });
     }
 
@@ -451,6 +476,12 @@
             var precedingArgs = args.slice(0, fn.length - 1);
             var variadicArgs = args.slice(fn.length - 1);
             return fn.apply(this, precedingArgs.concat([variadicArgs]));
+        };
+    }
+
+    function unary(fn) {
+        return function unary(arg) {
+            return fn.call(this, arg);
         }
     }
 
@@ -459,7 +490,7 @@
     }
 
     function notDefined(value) {
-        return !isDefined(value)
+        return !isDefined(value);
     }
 
     function isDefined(value) {

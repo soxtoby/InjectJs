@@ -11,6 +11,8 @@
         this.dispose = this.disposeMethod = sinon.spy();
     }
     disposableType.prototype = new type();
+    function subType() { }
+    subType.prototype = new type();
 
     describe("empty container", function () {
         var sut = inject();
@@ -100,18 +102,7 @@
         when("setting up a registration for a type", function () {
             var registration = inject.forType(type);
 
-            when("resolving type", function() {
-                var sut = inject([registration]);
-                var result = sut(type);
-
-                it("instantiates the type", function() {
-                    result.should.be.an.instanceOf(type);
-                });
-            });
-
             when("subtype created for type", function () {
-                function subType() { }
-                subType.prototype = new type();
                 var chain = registration.create(subType);
                 var sut = inject([registration]);
 
@@ -175,15 +166,6 @@
                     then("resolves to factory return value", function () {
                         result.should.equal(expectedResult);
                     });
-                });
-            });
-
-            when("resolving type optionally", function () {
-                var sut = inject([registration]);
-                var result = sut(inject.optional(type));
-
-                it("instantiates the type", function () {
-                    result.should.be.an.instanceOf(type);
                 });
             });
         });
@@ -270,17 +252,64 @@
             });
         });
 
-        when("registering a constructor", function () {
+        when("registering a constructor", function() {
             var registration = inject.type(type);
             var sut = inject([registration]);
 
             isARegistration(registration);
 
-            when("type is resolved", function () {
+            when("type is resolved", function() {
                 var result = sut(type);
 
-                then("type resolves to instance of type", function () {
+                then("type is constructed", function() {
                     result.should.be.an.instanceOf(type);
+                });
+            });
+        });
+
+        when("registering a constructor for a base type", function () {
+            var registration = inject.type(subType).forType(type);
+            var sut = inject([registration]);
+
+            when("base type is resolved", function () {
+                var result = sut(type);
+
+                then("base type resolves to instance of subtype", function () {
+                    result.should.be.an.instanceOf(subType);
+                });
+            });
+
+            when("base type and subtype are resolved", function() {
+                var baseResult = sut(type);
+                var subResult = sut(subType);
+
+                then("types resolve to separate instances", function() {
+                    baseResult.should.not.equal(subResult);
+                });
+            });
+
+            when("resolving type optionally", function () {
+                var result = sut(inject.optional(type));
+
+                it("instantiates the constructor", function () {
+                    result.should.be.an.instanceOf(subType);
+                });
+            });
+        });
+
+        when("registering one constructor for two types", function() {
+            var registration = inject.type(subType).forType(type).forType(subType);
+            var sut = inject([registration]);
+
+            isARegistration(registration);
+
+            when("both types are resolved", function() {
+                var result1 = sut(type);
+                var result2 = sut(subType);
+
+                then("types are resolved to same instance of constructor", function() {
+                    result1.should.equal(result2);
+                    result1.should.be.an.instanceOf(subType);
                 });
             });
         });
@@ -318,7 +347,7 @@
                 when("factory returns instance of type & type is resolved", function () {
                     var expectedResult = new type();
                     factory.returns(expectedResult);
-                    factory.dependencies = [dependency1]
+                    factory.dependencies = [dependency1];
                     var result = sut(type);
 
                     then("type resolves to factory return value", function () {
@@ -436,7 +465,7 @@
     });
 
     describe("parameter registration", function () {
-        var typeRegistration = inject.forType(typeWithDependencies);
+        var typeRegistration = inject.type(typeWithDependencies);
 
         when("type is registered with parameter hook", function () {
             var dependency1Instance = new dependency1();
@@ -554,7 +583,7 @@
 
     describe("lifetimes", function () {
         when("registered as singleton in outer container", function () {
-            var registration = inject.forType(disposableType);
+            var registration = inject.type(disposableType);
             var chain = registration.once();
             var outer = inject([registration]);
 
@@ -656,7 +685,7 @@
         });
 
         when("registered with instance per container lifetime", function () {
-            var registration = inject.forType(disposableType);
+            var registration = inject.type(disposableType);
             var chain = registration.perContainer();
             var outer = inject([registration]);
 
@@ -709,7 +738,7 @@
         });
 
         when("registered with instance per dependency lifetime", function () {
-            var registration = inject.forType(disposableType);
+            var registration = inject.type(disposableType);
             var chain = registration.perDependency();
 
             var sut = inject([registration]);
@@ -942,7 +971,7 @@
             });
 
             when("resolving to a function", function() {
-                var action = function () { registration.resolveFunction(function () { }) };
+                var action = function () { registration.resolveFunction(function () { }); };
 
                 it("throws", function() {
                     action.should.throw("A type cannot be resolved to a function");
@@ -1057,7 +1086,7 @@
 
                 (function () {
                     inject.ctor(['foo'], function () { });
-                }).should.throw("Type has 1 dependency, but 0 parameters")
+                }).should.throw("Type has 1 dependency, but 0 parameters");
             });
         });
     });
