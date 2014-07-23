@@ -252,6 +252,29 @@
             });
         });
 
+        when("registering two things for the same key", function () {
+            var sut = inject([
+                inject.value('one').forKey('key'),
+                inject.value('two').forKey('key')
+            ]);
+
+            when("resolving key", function() {
+                var result = sut('key');
+
+                then("last registration is resolved", function() {
+                    result.should.equal('two');
+                });
+            });
+
+            when("resolving everything for key", function() {
+                var result = sut(inject.all('key'));
+
+                then("all registrations are resolved", function() {
+                    result.should.deep.equal(['one', 'two']);
+                });
+            });
+        });
+
         when("registering a constructor", function() {
             var registration = inject.type(type);
             var sut = inject([registration]);
@@ -537,6 +560,15 @@
             then("type can be resolved from inner container", function () {
                 inner('foo').should.be.an.instanceOf(type);
             });
+
+            when("resolving everything for key from inner container", function() {
+                var result = inner(inject.all('foo'));
+
+                then("type is resolved", function() {
+                    result.length.should.equal(1);
+                    result[0].should.be.an.instanceOf(type);
+                });
+            });
         });
 
         when("type is registered in sub-container", function () {
@@ -550,6 +582,29 @@
 
             then("type can be resolved from inner container", function () {
                 inner('foo').should.be.an.instanceOf(type);
+            });
+        });
+
+        when("registered in both outer and inner containers", function () {
+            var outerValue = 'outer';
+            var innerValue = 'inner';
+            var outer = inject([inject.forKey('foo').use(outerValue)]);
+            var inner = inject([inject.forKey('foo').use(innerValue)], outer);
+
+            when("resolved from inner container", function() {
+                var result = inner('foo');
+
+                then("resolved to inner container value", function() {
+                    result.should.equal(innerValue);
+                });
+            });
+
+            when("resolving everything for key from inner container", function() {
+                var result = inner(inject.all('foo'));
+
+                then("resolved to values from both containers", function() {
+                    result.should.have.members([outerValue, innerValue]);
+                });
             });
         });
 

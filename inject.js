@@ -3,12 +3,12 @@
     var scopeFn = 'inject.scope'; // Key for current scope
     var _call = variadic(_apply);
     var call_ = variadic(apply_);
+    var call = variadic(apply);
     var resolveChain = [];
 
     window.inject = extend(function inject(registrations, parentResolve) {
         var scope = newScope(),
-            getInjectedFactory = newLookup(registeredKeys(), registeredFactories()),
-            getParentFactory = parentResolve && parentResolve.injected || newLookup([], []);
+            resolveInjected = newLookup(registeredKeys(), registeredFactories(), parentResolve && parentResolve.injected);
 
         return parentResolve
             ? parentResolve(new Registration(constant(extendedResolve()), null))
@@ -38,12 +38,6 @@
         function resolveFunction(fn, localKeys, localValues) {
             return variadic(function (args) {
                 return fn.apply(this, resolveDependencies(dependencyKeys(fn), localKeys || [], localValues || []).concat(args));
-            });
-        }
-
-        function resolveInjected(key, fallback) {
-            return getInjectedFactory(key, function () {
-                return getParentFactory(key, fallback);
             });
         }
 
@@ -140,6 +134,15 @@
 
         named: function (type, key) {
             return new Registration(dependant([key], _call(verifyType, type)), null);
+        },
+
+        all: function (key) {
+            return new Registration(dependant([resolveFn], function (resolve) {
+                return resolve.injected.all(key)
+                    .map(unary(resolve.function))
+                    .map(unary(call))
+                    .map(_call(verifyType, key));
+            }), null);
         }
     });
 
@@ -153,7 +156,7 @@
             _function;
 
         extend(self, {
-            keys: function() {
+            keys: function () {
                 return !_keys.length && _constructor
                     ? [_constructor]
                     : _keys;
@@ -360,12 +363,13 @@
         };
     }
 
-    function newLookup(keys, values) {
+    function newLookup(keys, values, parent) {
+        parent = parent || { all: constant([]) };
         return extend(
             function lookup(key, fallback) {
-                var i = key ? keys.indexOf(key) : -1;
-                return i >= 0
-                    ? values[i]
+                var value = last(key ? all(key) : []);
+                return isDefined(value)
+                    ? value
                     : (fallback || constant())();
             },
             {
@@ -375,9 +379,17 @@
                         keys.splice(i, 1);
                         values.splice(i, 1);
                     }
-                }
+                },
+                all: all
             }
         );
+
+        function all(key) {
+            return parent.all(key)
+                .concat(values.filter(function (_, i) {
+                    return keys[i] == key;
+                }));
+        }
     }
 
     function verifyType(key, value) {
@@ -458,6 +470,10 @@
         return Array.prototype.concat.apply([], array.map(mapFn));
     }
 
+    function last(array) {
+        return array[array.length - 1];
+    }
+
     function _apply(fn, args) {
         return variadic(function partial(moreArgs) {
             return fn.apply(this, args.concat(moreArgs));
@@ -468,6 +484,10 @@
         return variadic(function partial(moreArgs) {
             return fn.apply(this, moreArgs.concat(args));
         });
+    }
+
+    function apply(fn, args) {
+        return fn.apply(this, args);
     }
 
     function variadic(fn) {
