@@ -85,6 +85,15 @@
             return dependant(dependencies, fn);
         },
 
+        fallback: function (fallbackFn) {
+            var fallbackResolve = inject();
+            fallbackResolve.injected.all = function (key) {
+                var value = fallbackFn(key);
+                return isDefined(value) ? [constant(value)] : [];
+            };
+            return fallbackResolve;
+        },
+
         forType: function (type) {
             verifyIsFunction(type, "Registration type");
             return new Registration().forType(type);

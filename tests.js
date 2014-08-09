@@ -98,6 +98,40 @@
         });
     });
 
+    describe("fallback resolve", function () {
+        var fallbackFn = sinon.stub();
+        var registeredKey = 'foo';
+        var registeredValue = 'bar';
+        var sut = inject([inject.value(registeredValue).forKey(registeredKey)], inject.fallback(fallbackFn));
+
+        when("resolving registered key", function () {
+            var result = sut(registeredKey);
+
+            then("registered value returned", function() {
+                result.should.equal(registeredValue);
+            });
+        });
+
+        when("resolving unregistered key", function () {
+            var unregisteredKey = 'bar';
+            var fallbackValue = 'baz';
+            fallbackFn.withArgs(unregisteredKey).returns(fallbackValue);
+            var result = sut(unregisteredKey);
+
+            then("resolved through fallback function", function() {
+                result.should.equal(fallbackValue);
+            });
+        });
+
+        when("resolving injected factory function without a fallback value", function() {
+            var result = sut.injected('bar');
+
+            then("factory is undefined", function() {
+                expect(result).to.be.undefined;
+            });
+        });
+    });
+
     describe("type registration", function () {
         when("setting up a registration for a type", function () {
             var registration = inject.forType(type);
@@ -215,28 +249,28 @@
                 });
             });
 
-            when("function resolved for key", function() {
+            when("function resolved for key", function () {
                 var expectedResult = 'baz';
                 var func = sinon.stub();
                 func.dependencies = [dependency1, dependency2];
                 func.returns(expectedResult);
                 var chain = registration.resolveFunction(func);
 
-                it("can be chained", function() {
+                it("can be chained", function () {
                     chain.should.equal(registration);
                 });
 
-                when("resolving key", function() {
+                when("resolving key", function () {
                     var result = inject([registration])('named');
 
-                    then("result is a function", function() {
+                    then("result is a function", function () {
                         result.should.be.a('function');
                     });
 
-                    when("result is called", function() {
+                    when("result is called", function () {
                         var resultResult = result('foo', 'bar');
 
-                        then("function is called with dependencies and passed in arguments", function() {
+                        then("function is called with dependencies and passed in arguments", function () {
                             var args = func.firstCall.args;
                             args[0].should.be.an.instanceOf(dependency1);
                             args[1].should.be.an.instanceOf(dependency2);
@@ -244,7 +278,7 @@
                             args[3].should.equal('bar');
                         });
 
-                        it("returns function return value", function() {
+                        it("returns function return value", function () {
                             resultResult.should.equal(expectedResult);
                         });
                     });
@@ -258,33 +292,33 @@
                 inject.value('two').forKey('key')
             ]);
 
-            when("resolving key", function() {
+            when("resolving key", function () {
                 var result = sut('key');
 
-                then("last registration is resolved", function() {
+                then("last registration is resolved", function () {
                     result.should.equal('two');
                 });
             });
 
-            when("resolving everything for key", function() {
+            when("resolving everything for key", function () {
                 var result = sut(inject.all('key'));
 
-                then("all registrations are resolved", function() {
+                then("all registrations are resolved", function () {
                     result.should.deep.equal(['one', 'two']);
                 });
             });
         });
 
-        when("registering a constructor", function() {
+        when("registering a constructor", function () {
             var registration = inject.type(type);
             var sut = inject([registration]);
 
             isARegistration(registration);
 
-            when("type is resolved", function() {
+            when("type is resolved", function () {
                 var result = sut(type);
 
-                then("type is constructed", function() {
+                then("type is constructed", function () {
                     result.should.be.an.instanceOf(type);
                 });
             });
@@ -302,11 +336,11 @@
                 });
             });
 
-            when("base type and subtype are resolved", function() {
+            when("base type and subtype are resolved", function () {
                 var baseResult = sut(type);
                 var subResult = sut(subType);
 
-                then("types resolve to separate instances", function() {
+                then("types resolve to separate instances", function () {
                     baseResult.should.not.equal(subResult);
                 });
             });
@@ -320,17 +354,17 @@
             });
         });
 
-        when("registering one constructor for two types", function() {
+        when("registering one constructor for two types", function () {
             var registration = inject.type(subType).forType(type).forType(subType);
             var sut = inject([registration]);
 
             isARegistration(registration);
 
-            when("both types are resolved", function() {
+            when("both types are resolved", function () {
                 var result1 = sut(type);
                 var result2 = sut(subType);
 
-                then("types are resolved to same instance of constructor", function() {
+                then("types are resolved to same instance of constructor", function () {
                     result1.should.equal(result2);
                     result1.should.be.an.instanceOf(subType);
                 });
@@ -377,7 +411,7 @@
                         result.should.equal(expectedResult);
                     });
 
-                    then("factory dependencies are passed in", function() {
+                    then("factory dependencies are passed in", function () {
                         factory.firstCall.args[0].should.be.an.instanceOf(dependency1);
                     });
                 });
@@ -445,7 +479,7 @@
             });
         });
 
-        when("registering a function", function() {
+        when("registering a function", function () {
             var expectedResult = 'baz';
             var func = sinon.stub();
             func.dependencies = [dependency1, dependency2];
@@ -454,17 +488,17 @@
 
             isARegistration(registration);
 
-            when("registration is set up for key", function() {
+            when("registration is set up for key", function () {
                 registration.forKey('key');
                 var sut = inject([registration]);
 
-                when("key is resolved", function() {
+                when("key is resolved", function () {
                     var result = sut('key');
 
-                    when("result is called", function() {
+                    when("result is called", function () {
                         var resultResult = result('foo', 'bar');
 
-                        then("function is called with dependencies and passed in arguments", function() {
+                        then("function is called with dependencies and passed in arguments", function () {
                             var args = func.firstCall.args;
                             args[0].should.be.an.instanceOf(dependency1);
                             args[1].should.be.an.instanceOf(dependency2);
@@ -472,7 +506,7 @@
                             args[3].should.equal('bar');
                         });
 
-                        it("returns function return value", function() {
+                        it("returns function return value", function () {
                             resultResult.should.equal(expectedResult);
                         });
                     });
@@ -481,7 +515,7 @@
         });
 
         function isARegistration(registration) {
-            then("registration is returned", function() {
+            then("registration is returned", function () {
                 registration.should.respondTo('build');
             });
         }
@@ -561,10 +595,10 @@
                 inner('foo').should.be.an.instanceOf(type);
             });
 
-            when("resolving everything for key from inner container", function() {
+            when("resolving everything for key from inner container", function () {
                 var result = inner(inject.all('foo'));
 
-                then("type is resolved", function() {
+                then("type is resolved", function () {
                     result.length.should.equal(1);
                     result[0].should.be.an.instanceOf(type);
                 });
@@ -591,18 +625,18 @@
             var outer = inject([inject.forKey('foo').use(outerValue)]);
             var inner = inject([inject.forKey('foo').use(innerValue)], outer);
 
-            when("resolved from inner container", function() {
+            when("resolved from inner container", function () {
                 var result = inner('foo');
 
-                then("resolved to inner container value", function() {
+                then("resolved to inner container value", function () {
                     result.should.equal(innerValue);
                 });
             });
 
-            when("resolving everything for key from inner container", function() {
+            when("resolving everything for key from inner container", function () {
                 var result = inner(inject.all('foo'));
 
-                then("resolved to values from both containers", function() {
+                then("resolved to values from both containers", function () {
                     result.should.have.members([outerValue, innerValue]);
                 });
             });
@@ -724,7 +758,7 @@
                 inject.value(outerDependency2).forType(dependency2)
             ]);
 
-            when("resolved from an inner container", function() {
+            when("resolved from an inner container", function () {
                 var inner = inject([
                     inject.value(new dependency1()).forType(dependency1),
                     inject.value(new dependency2()).forType(dependency2)
@@ -732,7 +766,7 @@
 
                 var result = inner(typeWithDependencies);
 
-                then("dependencies are resolved from outer container", function() {
+                then("dependencies are resolved from outer container", function () {
                     result.dependency1.should.equal(outerDependency1);
                     result.dependency2.should.equal(outerDependency2);
                 });
@@ -833,23 +867,23 @@
             });
         });
 
-        when("factory function resolved", function() {
+        when("factory function resolved", function () {
             var funcDef = inject.func(disposableType);
             var sut = inject();
             var func = sut(funcDef);
 
-            when("factory function called twice", function() {
+            when("factory function called twice", function () {
                 var result1 = func();
                 var result2 = func();
 
-                it("returns separate instances", function() {
+                it("returns separate instances", function () {
                     result1.should.not.equal(result2);
                 });
 
-                when("container disposed", function() {
+                when("container disposed", function () {
                     sut.dispose();
 
-                    then("both instances are disposed", function() {
+                    then("both instances are disposed", function () {
                         result1.disposeMethod.should.have.been.called;
                         result2.disposeMethod.should.have.been.called;
                     });
@@ -1025,10 +1059,10 @@
                 });
             });
 
-            when("resolving to a function", function() {
+            when("resolving to a function", function () {
                 var action = function () { registration.resolveFunction(function () { }); };
 
-                it("throws", function() {
+                it("throws", function () {
                     action.should.throw("A type cannot be resolved to a function");
                 });
             });
@@ -1042,73 +1076,73 @@
             });
         });
 
-        when("configuring a value registration", function() {
+        when("configuring a value registration", function () {
             var registration = inject.value({});
 
-            when("registering for non-base type", function() {
+            when("registering for non-base type", function () {
                 var action = function () { registration.forType(function nonBaseType() { }); };
 
-                it("throws", function() {
+                it("throws", function () {
                     action.should.throw("Value does not inherit from nonBaseType");
                 });
             });
 
-            when("registering for non-string key", function() {
+            when("registering for non-string key", function () {
                 var action = function () { registration.forKey({}); };
 
-                it("throws", function() {
+                it("throws", function () {
                     action.should.throw("Registration key is not a string");
                 });
             });
         });
 
-        when("configuring function registration", function() {
+        when("configuring function registration", function () {
             var registration = inject.function(function () { });
 
-            when("registering for type", function() {
+            when("registering for type", function () {
                 var action = function () { registration.forType(type); };
 
-                it("throws", function() {
+                it("throws", function () {
                     action.should.throw("A type cannot be resolved to a function");
                 });
             });
         });
 
-        when("configuring constructor registration", function() {
+        when("configuring constructor registration", function () {
             var registration = inject.type(function nonSubType() { });
 
-            when("registering for non-base type", function() {
+            when("registering for non-base type", function () {
                 var action = function () { registration.forType(function () { }); };
 
-                it("throws", function() {
+                it("throws", function () {
                     action.should.throw("nonSubType does not inherit from anonymous base type");
                 });
             });
         });
 
-        when("registering a typed parameter with wrong type", function() {
+        when("registering a typed parameter with wrong type", function () {
             var registration = inject.forKey('foo');
             var action = function () { registration.withDependency(type, {}); };
 
-            it("throws", function() {
+            it("throws", function () {
                 action.should.throw("Value does not inherit from type");
             });
         });
 
-        when("injecting a registration with no factory", function() {
+        when("injecting a registration with no factory", function () {
             var registration = inject.forKey('foo');
             var action = function () { inject([registration]); };
 
-            it("throws", function() {
+            it("throws", function () {
                 action.should.throw("No factory defined for 'foo' registration");
             });
         });
 
-        when("injecting a registration with no key", function() {
+        when("injecting a registration with no key", function () {
             var registration = inject.value({});
             var action = function () { inject([registration]); };
 
-            it("throws", function() {
+            it("throws", function () {
                 action.should.throw("No key defined for registration");
             });
         });
