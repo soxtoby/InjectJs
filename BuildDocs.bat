@@ -1,0 +1,1 @@
+typedoc --out doc ./ --includeDeclarations --name inject.js
