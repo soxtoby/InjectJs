@@ -91,32 +91,74 @@
         var fallbackFn = sinon.stub();
         var registeredKey = 'foo';
         var registeredValue = 'bar';
-        var sut = inject([inject.value(registeredValue).forKey(registeredKey)], inject.fallback(fallbackFn));
+        var registration = inject.value(registeredValue).forKey(registeredKey);
 
-        when("resolving registered key", function () {
-            var result = sut(registeredKey);
+        when("injected without parent container", function () {
+            var sut = inject([registration], inject.fallback(fallbackFn));
 
-            then("registered value returned", function() {
-                result.should.equal(registeredValue);
+            when("resolving registered key", function () {
+                var result = sut(registeredKey);
+
+                then("registered value returned", function () {
+                    result.should.equal(registeredValue);
+                });
+            });
+
+            when("resolving unregistered key", function () {
+                var unregisteredKey = 'bar';
+                var fallbackValue = 'baz';
+                fallbackFn.withArgs(unregisteredKey).returns(fallbackValue);
+                var result = sut(unregisteredKey);
+
+                then("resolved through fallback function", function () {
+                    result.should.equal(fallbackValue);
+                });
+            });
+
+            when("resolving injected factory function without a fallback value", function () {
+                var result = sut.injected('bar');
+
+                then("factory is undefined", function () {
+                    expect(result).to.be.undefined;
+                });
             });
         });
 
-        when("resolving unregistered key", function () {
-            var unregisteredKey = 'bar';
-            var fallbackValue = 'baz';
-            fallbackFn.withArgs(unregisteredKey).returns(fallbackValue);
-            var result = sut(unregisteredKey);
+        when("injected with parent container", function () {
+            var outerKey = 'bar';
+            var outerValue = 'baz';
+            var outer = inject([inject.value(outerValue).forKey(outerKey)]);
+            var inner = inject([registration], inject.fallback(fallbackFn, outer));
 
-            then("resolved through fallback function", function() {
-                result.should.equal(fallbackValue);
+            when("resolving key registered in inner container", function() {
+                var result = inner(registeredKey);
+
+                then("registered value returned", function() {
+                    result.should.equal(registeredValue);
+                });
             });
-        });
 
-        when("resolving injected factory function without a fallback value", function() {
-            var result = sut.injected('bar');
+            when("fallback returns value for key registered in outer container", function() {
+                var fallbackValue = 'qux';
+                fallbackFn.withArgs(outerKey).returns(fallbackValue);
 
-            then("factory is undefined", function() {
-                expect(result).to.be.undefined;
+                when("resolving key registered in outer container", function() {
+                    var result = inner(outerKey);
+
+                    then("fallback value returned", function() {
+                        result.should.equal(fallbackValue);
+                    });
+                });
+            });
+
+            when("fallback returns nothing for key registered in outer container", function() {
+                when("resolving key registered in outer container", function() {
+                    var result = inner(outerKey);
+
+                    then("outer container's value returned", function() {
+                        result.should.equal(outerValue);
+                    });
+                });
             });
         });
     });

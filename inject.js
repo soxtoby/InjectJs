@@ -87,11 +87,13 @@
             return dependant(dependencies, fn);
         },
 
-        fallback: function (fallbackFn) {
+        fallback: function (fallbackFn, parentResolve) {
             var fallbackResolve = inject();
+            parentResolve = parentResolve || { injected: { all: constant([]) } };
             fallbackResolve.injected.all = function (key) {
                 var value = fallbackFn(key);
-                return isDefined(value) ? [noLifeTime(constant(value))] : [];
+                return parentResolve.injected.all(key)
+                    .concat(isDefined(value) ? [noLifeTime(constant(value))] : []);
             };
             return fallbackResolve;
         },
