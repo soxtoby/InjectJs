@@ -103,6 +103,11 @@
             return new Registration().forType(type);
         },
 
+        forTypes: function(types) {
+            types.forEach(unary(call_(verifyIsFunction, "Registration type")));
+            return new Registration().forTypes(types);
+        },
+
         type: function (type) {
             verifyIsFunction(type, "Registration type");
             return new Registration().create(type);
@@ -110,6 +115,10 @@
 
         forKey: function (key) {
             return new Registration().forKey(key);
+        },
+
+        forKeys: function(keys) {
+            return new Registration().forKeys(keys);
         },
 
         single: function (type) {
@@ -176,15 +185,23 @@
             },
 
             forType: chain(function (type) {
-                _keys.push(type);
+                self.forTypes([type]);
+            }),
+
+            forTypes: chain(function(types) {
+                _keys = _keys.concat(types);
                 validate();
             }),
 
             forKey: chain(function (key) {
-                if (typeof key != 'string')
+                self.forKeys([key]);
+            }),
+
+            forKeys: chain(function(keys) {
+                if (keys.some(function(key) {return typeof key != 'string';}))
                     throw new Error("Registration key is not a string");
 
-                _keys.push(key);
+                _keys = _keys.concat(keys);
                 validate();
             }),
 

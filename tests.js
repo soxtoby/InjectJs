@@ -347,7 +347,7 @@
             });
         });
 
-        when("registering two things for the same key", function () {
+        when("registering multiple things for the same key", function () {
             var sut = inject([
                 inject.value('one').forKey('key'),
                 inject.value('two').forKey('key')
@@ -415,21 +415,64 @@
             });
         });
 
-        when("registering one constructor for two types", function () {
-            var registration = inject.type(subType).forType(type).forType(subType);
-            var sut = inject([registration]);
-
-            isARegistration(registration);
-
-            when("both types are resolved", function () {
-                var result1 = sut(type);
-                var result2 = sut(subType);
-
-                then("types are resolved to same instance of constructor", function () {
-                    result1.should.equal(result2);
-                    result1.should.be.an.instanceOf(subType);
-                });
+        when("registering one constructor for multiple keys", function () {
+            when("registered for type more than once", function() {
+                testRegistrationForMultipleTypes(inject.type(subType).forType(type).forType(subType));
             });
+
+            when("registered for multiple types at once", function() {
+                testRegistrationForMultipleTypes(inject.type(subType).forTypes([type, subType]));
+            });
+
+            when("type created for multiple-type registration", function() {
+                testRegistrationForMultipleTypes(inject.forTypes([type, subType]).create(subType));
+            });
+
+            function testRegistrationForMultipleTypes(registration) {
+                var sut = inject([registration]);
+
+                isARegistration(registration);
+
+                when("both types are resolved", function () {
+                    var result1 = sut(type);
+                    var result2 = sut(subType);
+
+                    then("types are resolved to same instance of constructor", function () {
+                        result1.should.equal(result2);
+                        result1.should.be.an.instanceOf(subType);
+                    });
+                });
+            }
+
+            var key1 = 'foo', key2 = 'bar';
+
+            when("registered for key more than once", function () {
+                testRegistrationForMultipleKeys(inject.type(type).forKey(key1).forType(key2));
+            });
+
+            when("registered for multiple keys at once", function () {
+                testRegistrationForMultipleKeys(inject.type(type).forKeys([key1, key2]));
+            });
+
+            when("type created for multiple-key registration", function () {
+                testRegistrationForMultipleKeys(inject.forKeys([key1, key2]).create(type));
+            });
+
+            function testRegistrationForMultipleKeys(registration) {
+                var sut = inject([registration]);
+
+                isARegistration(registration);
+
+                when("both keys are resolved", function () {
+                    var result1 = sut(key1);
+                    var result2 = sut(key2);
+
+                    then("keys are resolved to same instance of constructor", function () {
+                        result1.should.equal(result2);
+                        result1.should.be.an.instanceOf(type);
+                    });
+                });
+            }
         });
 
         when("registering constructor as a singleton", function () {
