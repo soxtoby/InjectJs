@@ -56,18 +56,7 @@
                 });
             });
 
-            when("resolving factory function with partial parameters", function () {
-                var factory = sut(inject.func(typeWithDependencies, [dependency2]));
-
-                when("calling factory function", function () {
-                    var dependency2Instance = new dependency2();
-                    var result = factory(dependency2Instance);
-
-                    then("type constructed with passed in dependency", function () {
-                        result.dependency2.should.equal(dependency2Instance);
-                    });
-                });
-            });
+            assertFactoryFunctionDependencyResolution(sut);
         });
 
         when("resolving optional dependency", function () {
@@ -283,6 +272,36 @@
                         });
                     });
                 });
+
+                when("resolving factory function with partial parameters", function () {
+                    var sut = inject([registration]);
+                    var factory = sut(inject.func('named', [dependency2]));
+
+                    when("calling factory function", function () {
+                        var dependency2Instance = new dependency2();
+                        var result = factory(dependency2Instance);
+
+                        then("result is a function", function () {
+                            result.should.be.a('function');
+                        });
+
+                        when("result is called", function () {
+                            var resultResult = result('foo', 'bar');
+
+                            then("function is called with specified dependency, resolved dependencies, and passed in arguments", function () {
+                                var args = func.firstCall.args;
+                                args[0].should.be.an.instanceOf(dependency1);
+                                args[1].should.equal(dependency2Instance);
+                                args[2].should.equal('foo');
+                                args[3].should.equal('bar');
+                            });
+
+                            it("returns function return value", function () {
+                                resultResult.should.equal(expectedResult);
+                            });
+                        });
+                    });
+                });
             });
         });
 
@@ -385,6 +404,12 @@
                     result1.should.equal(result2);
                 });
             });
+        });
+
+        when("registering a constructor with dependencies", function() {
+            var sut = inject([inject.type(typeWithDependencies)]);
+
+            assertFactoryFunctionDependencyResolution(sut);
         });
 
         when("registering a factory method", function () {
@@ -545,6 +570,8 @@
                     result.dependency2.should.be.an.instanceOf(dependency2);
                 });
             });
+
+            assertFactoryFunctionDependencyResolution(sut);
         });
 
         when("registering a typed parameter", function () {
@@ -671,6 +698,10 @@
     });
 
     describe("lifetimes", function () {
+        when("not registered", function() {
+            assertInstancePerContainerLifeTime(inject());
+        });
+
         when("registered as singleton in outer container", function () {
             var registration = inject.type(disposableType);
             var chain = registration.once();
@@ -771,7 +802,9 @@
                     result.dependency2.should.equal(outerDependency2);
                 });
             });
-        });
+
+            assertFactoryFunctionLifeTime(outer);
+            });
 
         when("registered with instance per container lifetime", function () {
             var registration = inject.type(disposableType);
@@ -782,48 +815,7 @@
                 chain.should.equal(registration);
             });
 
-            when("resolved twice from same container", function () {
-                var result1 = outer(disposableType);
-                var result2 = outer(disposableType);
-
-                then("same instance returned both times", function () {
-                    result1.should.equal(result2);
-                });
-            });
-
-            when("resolved from outer & inner containers", function () {
-                var inner = inject([], outer);
-                var result1 = outer(disposableType);
-                var result2 = inner(disposableType);
-
-                then("two separate instances are created", function () {
-                    result1.should.not.equal(result2);
-                });
-
-                when("inner container is disposed", function () {
-                    inner.dispose();
-
-                    then("object resolved from outer container is not disposed", function () {
-                        result1.disposeMethod.should.not.have.been.called;
-                    });
-
-                    then("object resolved from inner container is disposed", function () {
-                        result2.disposeMethod.should.have.been.called;
-                    });
-                });
-
-                when("outer container is disposed", function () {
-                    outer.dispose();
-
-                    then("object resolved from outer container is disposed", function () {
-                        result1.disposeMethod.should.have.been.called;
-                    });
-
-                    then("object resolved from inner container is disposed", function () {
-                        result2.disposeMethod.should.have.been.called;
-                    });
-                });
-            });
+            assertInstancePerContainerLifeTime(outer);
         });
 
         when("registered with instance per dependency lifetime", function () {
@@ -867,29 +859,52 @@
             });
         });
 
-        when("factory function resolved", function () {
-            var funcDef = inject.func(disposableType);
-            var sut = inject();
-            var func = sut(funcDef);
+        function assertInstancePerContainerLifeTime(outer) {
+            when("resolved twice from same container", function () {
+                var result1 = outer(disposableType);
+                var result2 = outer(disposableType);
 
-            when("factory function called twice", function () {
-                var result1 = func();
-                var result2 = func();
+                then("same instance returned both times", function () {
+                    result1.should.equal(result2);
+                });
+            });
 
-                it("returns separate instances", function () {
+            when("resolved from outer & inner containers", function () {
+                var inner = inject([], outer);
+                var result1 = outer(disposableType);
+                var result2 = inner(disposableType);
+
+                then("two separate instances are created", function () {
                     result1.should.not.equal(result2);
                 });
 
-                when("container disposed", function () {
-                    sut.dispose();
+                when("inner container is disposed", function () {
+                    inner.dispose();
 
-                    then("both instances are disposed", function () {
+                    then("object resolved from outer container is not disposed", function () {
+                        result1.disposeMethod.should.not.have.been.called;
+                    });
+
+                    then("object resolved from inner container is disposed", function () {
+                        result2.disposeMethod.should.have.been.called;
+                    });
+                });
+
+                when("outer container is disposed", function () {
+                    outer.dispose();
+
+                    then("object resolved from outer container is disposed", function () {
                         result1.disposeMethod.should.have.been.called;
+                    });
+
+                    then("object resolved from inner container is disposed", function () {
                         result2.disposeMethod.should.have.been.called;
                     });
                 });
             });
-        });
+
+            assertFactoryFunctionLifeTime(outer);
+        }
     });
 
     describe("errors", function () {
@@ -1179,4 +1194,35 @@
             });
         });
     });
+
+    function assertFactoryFunctionLifeTime(sut) {
+        when("factory function resolved", function () {
+            var funcDef = inject.func(disposableType);
+            var func = sut(funcDef);
+
+            when("factory function called twice", function () {
+                var result1 = func();
+                var result2 = func();
+
+                it("returns separate instances", function () {
+                    result1.should.not.equal(result2);
+                });
+            });
+        });
+    }
+
+    function assertFactoryFunctionDependencyResolution(sut) {
+        when("resolving factory function with partial parameters", function () {
+            var factory = sut(inject.func(typeWithDependencies, [dependency2]));
+
+            when("calling factory function", function () {
+                var dependency2Instance = new dependency2();
+                var result = factory(dependency2Instance);
+
+                then("type constructed with passed in dependency", function () {
+                    result.dependency2.should.equal(dependency2Instance);
+                });
+            });
+        });
+    }
 });

@@ -1,6 +1,8 @@
 ﻿(function () {
+    var maxDependencyDepth = 20;
     var resolveFn = 'inject.resolveFn';
     var scopeFn = 'inject.scope'; // Key for current scope
+    var locals = 'inject.locals';
     var _call = variadic(_apply);
     var call_ = variadic(apply_);
     var call = variadic(apply);
@@ -27,9 +29,12 @@
             if (!key)
                 throw new Error("Tried to resolve " + name(key));
 
+            if (resolveChain.length == maxDependencyDepth)
+                throw new Error("Maximum dependency depth of " + maxDependencyDepth + " reached" + resolveChainMessage());
+
             resolveChain.push(key);
             try {
-                return verifyType(key, resolveFunction(defaultFactory(key))());
+                return verifyType(key, resolveFunction(defaultFactory(key).withLifeTime)());
             } finally {
                 resolveChain.pop();
             }
@@ -49,16 +54,13 @@
             if (injectedFn)
                 return injectedFn;
             if (isFunction(key))
-                return constructor(key);
+                return inject.type(key).build(resolve, scope);
             throw new Error('Failed to resolve key ' + name(key) + resolveChainMessage());
         }
 
         function resolveDependencies(required, localKeys, localValues) {
-            var local = newLocalLookup(localKeys, localValues);
-
-            return required.map(function (key) {
-                return local(key, resolve);
-            });
+            var localLookup = newLocalLookup(localKeys, localValues);
+            return required.map(unary(call_(localLookup, resolve)));
         }
 
         function registeredKeys() {
@@ -72,7 +74,7 @@
             return flatMap(
                     registrations || [],
                     function (r) { return repeat(r.build(resolve, scope), r.keys().length); })
-                .concat(constant(resolve), constant(scope));
+                .concat(noLifeTime(constant(resolve)), noLifeTime(constant(scope)));
         }
     }, {
         resolve: resolveFn,
@@ -89,7 +91,7 @@
             var fallbackResolve = inject();
             fallbackResolve.injected.all = function (key) {
                 var value = fallbackFn(key);
-                return isDefined(value) ? [constant(value)] : [];
+                return isDefined(value) ? [noLifeTime(constant(value))] : [];
             };
             return fallbackResolve;
         },
@@ -208,8 +210,8 @@
 
             resolveFunction: chain(function (fn) {
                 _function = fn;
-                _factory = dependant([resolveFn], function (resolve) {
-                    return resolve.function(fn);
+                _factory = dependant([resolveFn, locals], function (resolve, local) {
+                    return resolve.function(fn, local.keys, local.values);
                 });
 
                 validate();
@@ -245,7 +247,7 @@
                 verifyIsFunction(hook, 'Parameter hook');
 
                 var innerFactory = _factory;
-                _factory = dependant([resolveFn], function (resolve) {
+                _factory = dependant([resolveFn, locals], function (resolve, local) {
                     var originalKeys = dependencyKeys(innerFactory);
                     var hookedKeys = originalKeys.map(function (key) {
                         var hookValue = hook(resolve, key);
@@ -254,7 +256,7 @@
                             : key;
                     });
 
-                    return resolve.function(dependant(hookedKeys, _call(innerFactory)))();
+                    return resolve.function(dependant(hookedKeys, _call(innerFactory)), local.keys, local.values)();
                 });
             }),
 
@@ -278,8 +280,10 @@
                 if (notDefined(_factory))
                     throw new Error("No factory defined for " + name(self.keys()[0]) + " registration");
 
-                return dependant([resolveFn, scopeFn],
-                    _call(_lifeTime, defaultArg(_factory, _constructor), registeredResolve, registeredScope));
+                return extend(_factory, {
+                    withLifeTime: dependant([resolveFn, scopeFn, locals],
+                        _call(_lifeTime, _factory, registeredResolve, registeredScope))
+                });
             }
         });
 
@@ -367,7 +371,8 @@
     function newLocalLookup(keys, values) {
         return function localLookup(key, fallback) {
             var i = keys.indexOf(key);
-            return i < 0 ? fallback(key)
+            return key == locals ? { keys: keys, values: values }
+                : i < 0 ? fallback(key)
                 : (keys.splice(i, 1), values.splice(i, 1)[0]);
         };
     }
@@ -434,6 +439,10 @@
         return function () {
             return value;
         };
+    }
+
+    function noLifeTime(factory) {
+        return extend(factory, { withLifeTime: factory });
     }
 
     function constructor(fn) {
