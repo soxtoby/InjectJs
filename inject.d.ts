@@ -30,8 +30,14 @@ declare module Inject {
         /** Associates this Registration with a type. */
         forType(type: Function): Registration;
 
+        /** Associates this Registration with multiple types. */
+        forTypes(types: Function[]): Registration;
+
         /** Associates this Registration with a string key. */
         forKey(key: string): Registration;
+
+        /** Associates this Registration with multiple string keys. */
+        forKey(keys: string[]): Registration;
 
         /** Registers a constructor function. */
         create(type: Function): Registration;
@@ -92,17 +98,23 @@ declare var inject: {
      */
     ctor<T extends Function>(dependencies: Inject.Dependency[], fn: T): T;
 
-    /** Creates a fallback resolve function to be used as the parent of a top-level container */
-    fallback(fallbackFn: (key: any) => any): any;
+    /** Creates a fallback resolve function to be used as the parent of a container */
+    fallback(fallbackFn: (key: any) => any, parentResolve?: Inject.resolve): any;
 
     /** Creates a registration for a type. */
     forType(type: Function): Inject.Registration;
+
+    /** Creates a registration for multiple types. */
+    forTypes(types: Function[]): Inject.Registration;
     
     /** Creates a registration that instantiates a constructor function. */
     type(type: Function): Inject.Registration;
 
     /** Creates a registration for a key. */
     forKey(key: string): Inject.Registration;
+
+    /** Creates a registration for multiple keys. */
+    forKeys(keys: string[]): Inject.Registration;
 
     /** Creates a registration that constructs a type only once. */
     single(type: Function): Inject.Registration;
