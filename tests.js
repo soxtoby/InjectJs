@@ -1335,11 +1335,14 @@
             var factory = sut(inject.func(typeWithDependencies, [dependency2]));
 
             when("calling factory function", function () {
-                var dependency2Instance = new dependency2();
-                var result = factory(dependency2Instance);
+                var dependency2Instance1 = new dependency2();
+                var dependency2Instance2 = new dependency2();
+                var result1 = factory(dependency2Instance1);
+                var result2 = factory(dependency2Instance2);
 
-                then("type constructed with passed in dependency", function () {
-                    result.dependency2.should.equal(dependency2Instance);
+                then("type constructed with passed in dependencies", function () {
+                    result1.dependency2.should.equal(dependency2Instance1);
+                    result2.dependency2.should.equal(dependency2Instance2);
                 });
             });
         });

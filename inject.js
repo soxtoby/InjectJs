@@ -394,6 +394,8 @@
     function newLocalLookup(keys, values) {
         return function localLookup(key, fallback) {
             var i = keys.indexOf(key);
+            keys = keys.slice();    // Don't want to modify someone else's arrays
+            values = values.slice();
             return key == locals ? { keys: keys, values: values }
                 : i < 0 ? fallback(key)
                 : (keys.splice(i, 1), values.splice(i, 1)[0]);
