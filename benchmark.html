@@ -8,9 +8,10 @@
     <div id="results" style="white-space: pre;"></div>
     <script>
         var i, ctor,
+            count = 10000,
             ctors = [],
             registrations = [];
-        for (i = 0; i < 1000; i++) {
+        for (i = 0; i < count; i++) {
             ctor = function TestConstructor() { };
             ctors.push(ctor);
             registrations.push(inject.type(ctor));
@@ -22,13 +23,13 @@
 
         var endInject = performance.now();
 
-        for (i = 0; i < 1000; i++) {
+        for (i = 0; i < count; i++) {
             resolve(ctors[i]);
         }
 
         var beginResolve = performance.now();
 
-        for (i = 0; i < 1000; i++) {
+        for (i = 0; i < count; i++) {
             resolve(ctors[i]);
         }
 

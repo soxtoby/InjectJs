@@ -7,6 +7,7 @@
     var call_ = variadic(apply_);
     var call = variadic(apply);
     var resolveChain = [];
+    var uid = 1;
 
     window.inject = extend(function inject(registrations, parentResolve) {
         var scope = newScope(),
@@ -359,27 +360,20 @@
     }
 
     function newScope() {
-        var keys = [],
-            values = [],
-            lookup = newLookup(keys, values);
+        var lookup = newLookup([], []);
 
         return extend(
             function scope(key, resolveForKey) {
                 return lookup(key, function () {
-                    var value = resolveForKey();
-                    keys.push(key);
-                    values.push(value);
-                    return disposable(value);
+                    var value = disposable(key, resolveForKey());
+                    lookup.add(key, value);
+                    return value;
                 });
             }, {
                 dispose: function () {
-                    values
+                    lookup.values()
                         .filter(isDisposable)
                         .forEach(function (value) { value.dispose(); });
-
-                    // Clear arrays to help avoid memory leaks
-                    keys.length = 0;
-                    values.length = 0;
                 }
             });
 
@@ -388,9 +382,9 @@
                 && value.dispose;
         }
 
-        function disposable(value) {
+        function disposable(key, value) {
             if (isDisposable(value))
-                value.dispose = compose(value.dispose, _call(lookup.remove, value));
+                value.dispose = compose(value.dispose, _call(lookup.remove, key, value));
             return value;
         }
     }
@@ -405,6 +399,11 @@
     }
 
     function newLookup(keys, values, parent) {
+        var map = {};
+        keys.forEach(function (key, i) {
+            add(key, values[i]);
+        });
+
         parent = parent || { all: constant([]) };
         return extend(
             function lookup(key, fallback) {
@@ -414,22 +413,37 @@
                     : (fallback || constant())();
             },
             {
-                remove: function (value) {
+                add: add,
+                remove: function (key, value) {
+                    var values = map[mapKey(key)] || [];
                     var i = values.indexOf(value);
-                    if (i >= 0) {
-                        keys.splice(i, 1);
+                    if (i >= 0)
                         values.splice(i, 1);
-                    }
+                },
+                values: function () {
+                    return flatMap(Object.keys(map), function(key) { return map[key]; });
                 },
                 all: all
             }
         );
 
+        function add(key, value) {
+            key = mapKey(key);
+            if (!map[key])
+                map[key] = [];
+            map[key].push(value);
+        }
+
         function all(key) {
             return parent.all(key)
-                .concat(values.filter(function (_, i) {
-                    return keys[i] == key;
-                }));
+                .concat(map[mapKey(key)] || []);
+        }
+
+        function mapKey(key) {
+            return !key ? '\0'
+                : typeof key == 'string' ? key
+                : key._injectKey ? key._injectKey
+                : (key._injectKey = uid++);
         }
     }
 
