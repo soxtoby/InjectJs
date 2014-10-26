@@ -374,9 +374,10 @@
             }, {
                 dispose: function () {
                     values.slice().forEach(function (value) {
-                        if ('dispose' in value)
+                        if (value && 'dispose' in value)
                             value.dispose();
                     });
+                    values.length = 0; // Helps avoid memory leaks
                 }
             });
 

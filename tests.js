@@ -66,6 +66,10 @@
                 it("resolves to null", function () {
                     expect(result).to.equal(null);
                 });
+
+                then("container can be disposed", function() {
+                    sut.dispose();
+                });
             });
 
             when("with a default value", function () {
