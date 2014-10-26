@@ -20,7 +20,7 @@
         function extendedResolve() {
             return extend(resolve, {
                 injected: resolveInjected,
-                dispose: scope.dispose,
+                dispose: compose(scope.dispose, resolveInjected.dispose),
                 function: resolveFunction,
                 defaultFactory: defaultFactory
             });
@@ -374,6 +374,7 @@
                     lookup.values()
                         .filter(isDisposable)
                         .forEach(function (value) { value.dispose(); });
+                    lookup.dispose();
                 }
             });
 
@@ -398,10 +399,10 @@
         };
     }
 
-    function newLookup(keys, values, parent) {
+    function newLookup(initialKeys, initialValues, parent) {
         var map = {};
-        keys.forEach(function (key, i) {
-            add(key, values[i]);
+        initialKeys.forEach(function (key, i) {
+            add(key, initialValues[i]);
         });
 
         parent = parent || { all: constant([]) };
@@ -423,7 +424,12 @@
                 values: function () {
                     return flatMap(Object.keys(map), function(key) { return map[key]; });
                 },
-                all: all
+                all: all,
+                dispose: function () {
+                    Object.keys(map).forEach(function (key) {
+                        delete map[key];
+                    });
+                }
             }
         );
 
