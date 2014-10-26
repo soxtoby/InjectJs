@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <script src="inject.js"></script>
+</head>
+<body>
+    <div id="results" style="white-space: pre;"></div>
+    <script>
+        var i, ctor,
+            ctors = [],
+            registrations = [];
+        for (i = 0; i < 1000; i++) {
+            ctor = function TestConstructor() { };
+            ctors.push(ctor);
+            registrations.push(inject.type(ctor));
+        }
+
+        var beginInject = performance.now();
+
+        var resolve = inject(registrations);
+
+        var endInject = performance.now();
+
+        for (i = 0; i < 1000; i++) {
+            resolve(ctors[i]);
+        }
+
+        var beginResolve = performance.now();
+
+        for (i = 0; i < 1000; i++) {
+            resolve(ctors[i]);
+        }
+
+        var endResolve = performance.now();
+
+        document.getElementById('results').textContent =
+                'inject: ' + (endInject - beginInject) + 'ms\n' +
+                'resolve: ' + (endResolve - beginResolve) + 'ms';
+    </script>
+</body>
+</html>
