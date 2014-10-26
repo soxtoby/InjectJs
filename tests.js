@@ -240,13 +240,14 @@
         });
 
         when("setting up a registration for a key", function () {
-            var registration = inject.forKey('named');
+            var key = 'named';
+            var registration = inject.forKey(key);
 
             when("type created for key", function () {
                 registration.create(type);
 
                 when("resolving key", function () {
-                    var result = inject([registration])('named');
+                    var result = inject([registration])(key);
 
                     it("resolves to instance of the registered type", function () {
                         result.should.be.an.instanceOf(type);
@@ -254,7 +255,7 @@
                 });
 
                 when("resolving named dependency", function () {
-                    var result = inject([registration])(inject.named(type, 'named'));
+                    var result = inject([registration])(inject.named(type, key));
 
                     it("resolves to instance of the registered type", function () {
                         result.should.be.an.instanceOf(type);
@@ -267,7 +268,7 @@
                     var sut = inject([registration, reg2]);
 
                     when("resolving first name", function () {
-                        var result = sut('named');
+                        var result = sut(key);
 
                         it("resolves to instance of the first type", function () {
                             result.should.be.an.instanceOf(type);
@@ -296,7 +297,7 @@
                 });
 
                 when("resolving key", function () {
-                    var result = inject([registration])('named');
+                    var result = inject([registration])(key);
 
                     then("result is a function", function () {
                         result.should.be.a('function');
@@ -321,7 +322,7 @@
 
                 when("resolving factory function with partial parameters", function () {
                     var sut = inject([registration]);
-                    var factory = sut(inject.func('named', [dependency2]));
+                    var factory = sut(inject.func(key, [dependency2]));
 
                     when("calling factory function", function () {
                         var dependency2Instance = new dependency2();
@@ -346,6 +347,24 @@
                                 resultResult.should.equal(expectedResult);
                             });
                         });
+                    });
+                });
+            });
+
+            when("factory called for key, returning a string", function() {
+                var expectedResult = 'baz';
+                registration.call(function () { return expectedResult; });
+
+                when("resolving key", function() {
+                    var sut = inject([registration]);
+                    var result = sut(key);
+
+                    then("result is the factory return value", function() {
+                        result.should.equal(expectedResult);
+                    });
+
+                    then("container can be disposed", function() {
+                        sut.dispose();
                     });
                 });
             });

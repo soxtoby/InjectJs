@@ -373,16 +373,23 @@
                 });
             }, {
                 dispose: function () {
-                    values.slice().forEach(function (value) {
-                        if (value && 'dispose' in value)
-                            value.dispose();
-                    });
-                    values.length = 0; // Helps avoid memory leaks
+                    values
+                        .filter(isDisposable)
+                        .forEach(function (value) { value.dispose(); });
+
+                    // Clear arrays to help avoid memory leaks
+                    keys.length = 0;
+                    values.length = 0;
                 }
             });
 
+        function isDisposable(value) {
+            return value
+                && value.dispose;
+        }
+
         function disposable(value) {
-            if (value && 'dispose' in value)
+            if (isDisposable(value))
                 value.dispose = compose(value.dispose, _call(lookup.remove, value));
             return value;
         }
