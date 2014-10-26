@@ -550,11 +550,12 @@
     }
 
     function variadic(fn) {
+        var singularArgs = fn.length - 1;
         return function variadic() {
-            var args = Array.prototype.slice.call(arguments);
-            var precedingArgs = args.slice(0, fn.length - 1);
-            var variadicArgs = args.slice(fn.length - 1);
-            return fn.apply(this, precedingArgs.concat([variadicArgs]));
+            var args = Array.prototype.slice.call(arguments, 0, singularArgs);
+            var rest = Array.prototype.slice.call(arguments, singularArgs);
+            args.push(rest);
+            return fn.apply(this, args);
         };
     }
 
