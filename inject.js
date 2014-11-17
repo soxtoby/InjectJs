@@ -42,9 +42,9 @@
         }
 
         function resolveFunction(fn, localKeys, localValues) {
-            return variadic(function (args) {
+            return variadic(named([fn, '.resolved'], function (args) {
                 return fn.apply(this, resolveDependencies(dependencyKeys(fn), localKeys || [], localValues || []).concat(args));
-            });
+            }));
         }
 
         function defaultFactory(key) {
@@ -140,9 +140,9 @@
 
         func: function (key, funcDependencies) {
             return new Registration(dependant([resolveFn, scopeFn], function (resolve, scope) {
-                return variadic(function (args) {
+                return variadic(named(['('].concat((funcDependencies || []).map(name), ') -> ', name(key)), function (args) {
                     return scope(null, resolve.function(resolve.defaultFactory(key), funcDependencies, args));
-                });
+                }));
             }), null);
         },
 
@@ -185,20 +185,20 @@
                     : _keys;
             },
 
-            forType: chain(function (type) {
+            forType: chain(function forType(type) {
                 self.forTypes([type]);
             }),
 
-            forTypes: chain(function(types) {
+            forTypes: chain(function forTypes(types) {
                 _keys = _keys.concat(types);
                 validate();
             }),
 
-            forKey: chain(function (key) {
+            forKey: chain(function forKey(key) {
                 self.forKeys([key]);
             }),
 
-            forKeys: chain(function(keys) {
+            forKeys: chain(function forKeys(keys) {
                 if (keys.some(function(key) {return typeof key != 'string';}))
                     throw new Error("Registration key is not a string");
 
@@ -206,14 +206,14 @@
                 validate();
             }),
 
-            create: chain(function (type) {
+            create: chain(function create(type) {
                 _constructor = defaultArg(type, null);
                 _factory = constructor(type);
 
                 validate();
             }),
 
-            use: chain(function (value) {
+            use: chain(function use(value) {
                 if (notDefined(value))
                     throw new Error("Value is undefined");
 
@@ -223,12 +223,12 @@
                 validate();
             }),
 
-            call: chain(function (fn) {
+            call: chain(function call(fn) {
                 _factory = defaultArg(fn, null);
                 validate();
             }),
 
-            resolveFunction: chain(function (fn) {
+            resolveFunction: chain(function resolveFunction(fn) {
                 _function = fn;
                 _factory = dependant([resolveFn, locals], function (resolve, local) {
                     return resolve.function(fn, local.keys, local.values);
@@ -237,25 +237,25 @@
                 validate();
             }),
 
-            once: chain(function () {
-                _lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
+            once: chain(function once() {
+                _lifeTime = function singletonLifetime(factory, registeredResolve, registeredScope, resolve, currentScope) {
                     return registeredScope(self.keys()[0], registeredResolve.function(factory));
                 };
             }),
 
-            perContainer: chain(function () {
-                _lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
+            perContainer: chain(function perContainer() {
+                _lifeTime = function perContainerLifetime(factory, registeredResolve, registeredScope, resolve, currentScope) {
                     return currentScope(self.keys()[0], resolve.function(factory));
                 };
             }),
 
-            perDependency: chain(function () {
-                _lifeTime = function (factory, registeredResolve, registeredScope, resolve, currentScope) {
+            perDependency: chain(function perDependency() {
+                _lifeTime = function transientLifetime(factory, registeredResolve, registeredScope, resolve, currentScope) {
                     return currentScope(null, resolve.function(factory));
                 };
             }),
 
-            then: chain(function (callback) {
+            then: chain(function then(callback) {
                 _factory = dependant(dependencyKeys(_factory),
                     compose(_factory, function (value) {
                         callback(value);
@@ -263,7 +263,7 @@
                     }));
             }),
 
-            useParameterHook: chain(function (hook) {
+            useParameterHook: chain(function useParameterHook(hook) {
                 verifyIsFunction(hook, 'Parameter hook');
 
                 var innerFactory = _factory;
@@ -280,7 +280,7 @@
                 });
             }),
 
-            withDependency: chain(function (key, value) {
+            withDependency: chain(function withDependency(key, value) {
                 verifyType(key, value);
 
                 self.useParameterHook(function (resolve, paramKey) {
@@ -288,7 +288,7 @@
                 });
             }),
 
-            withArguments: chain(variadic(function (args) {
+            withArguments: chain(variadic(function withArguments(args) {
                 _factory = dependant(
                     dependencyKeys(_factory).slice(args.length),
                     _apply(_factory, args));
@@ -364,11 +364,11 @@
 
         return extend(
             function scope(key, resolveForKey) {
-                return lookup(key, function () {
+                return lookup(key, named(['(resolve ', key, ')'], function () {
                     var value = disposable(key, resolveForKey());
                     lookup.add(key, value);
                     return value;
-                });
+                }));
             }, {
                 dispose: function () {
                     lookup.values()
@@ -483,9 +483,9 @@
     }
 
     function constant(value) {
-        return function () {
+        return named([value], function () {
             return value;
-        };
+        });
     }
 
     function noLifeTime(factory) {
@@ -493,9 +493,9 @@
     }
 
     function constructor(fn) {
-        return dependant(dependencyKeys(fn), variadic(function constructorFn(args) {
+        return dependant(dependencyKeys(fn), variadic(named([fn, '.new'], function constructorFn(args) {
             return new (Function.prototype.bind.apply(fn, [null].concat(args)));
-        }));
+        })));
     }
 
     function dependant(dependencies, fn) {
@@ -506,15 +506,15 @@
     }
 
     function chain(fn) {
-        return compose(fn, function () {
+        return compose(fn, named(['this'], function () {
             return this;
-        });
+        }));
     }
 
     function compose(f, g) {
-        return function composed() {
+        return named(['(', f, ' >> ', g, ')'], function composed() {
             return g.call(this, f.apply(this, arguments));
-        };
+        });
     }
 
     function extend(obj, extra) {
@@ -540,15 +540,15 @@
     }
 
     function _apply(fn, args) {
-        return variadic(function partial(moreArgs) {
+        return variadic(named([fn, '.partial(', args.map(argName).join(', ') + ', ?)'], function partial(moreArgs) {
             return fn.apply(this, args.concat(moreArgs));
-        });
+        }));
     }
 
     function apply_(fn, args) {
-        return variadic(function partial(moreArgs) {
+        return variadic(named([fn, '.partial(?, ' + args.map(argName).join(', '), ')'], function partial(moreArgs) {
             return fn.apply(this, moreArgs.concat(args));
-        });
+        }));
     }
 
     function apply(fn, args) {
@@ -557,18 +557,31 @@
 
     function variadic(fn) {
         var singularArgs = fn.length - 1;
-        return function variadic() {
+        return named([fn, '.variadic'], function variadic() {
             var args = Array.prototype.slice.call(arguments, 0, singularArgs);
             var rest = Array.prototype.slice.call(arguments, singularArgs);
             args.push(rest);
             return fn.apply(this, args);
-        };
+        });
     }
 
     function unary(fn) {
-        return function unary(arg) {
+        return named([fn, '.unary'], function unary(arg) {
             return fn.call(this, arg);
-        }
+        });
+    }
+
+    function named(parts, fn) {
+        fn.displayName = parts.map(argName).join('');
+        return fn;
+    }
+
+    function argName(value) {
+        return isFunction(value)
+            ? value.displayName
+                ? value.displayName
+                : value.name || 'anonymous function'
+            : value
     }
 
     function isFunction(fn) {
