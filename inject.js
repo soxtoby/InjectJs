@@ -365,8 +365,9 @@
         return extend(
             function scope(key, resolveForKey) {
                 return lookup(key, named(['(resolve ', key, ')'], function () {
-                    var value = disposable(key, resolveForKey());
-                    lookup.add(key, value);
+                    var value = resolveForKey();
+                    if (key || isDisposable(value))
+                        lookup.add(key, disposable(key, value));
                     return value;
                 }));
             }, {
