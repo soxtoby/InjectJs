@@ -381,7 +381,7 @@
 
         function isDisposable(value) {
             return value
-                && value.dispose;
+                && isFunction(value.dispose);
         }
 
         function disposable(key, value) {

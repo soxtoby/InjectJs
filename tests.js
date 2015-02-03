@@ -89,6 +89,17 @@
                 result.should.equal(sut);
             });
         });
+
+        when("resolving an object with a non-function dispose property", function() {
+            function undisposable() { }
+            undisposable.prototype.dispose = 'foo';
+
+            var result = sut(undisposable);
+
+            then("dispose property untouched", function() {
+                result.dispose.should.equal('foo');
+            });
+        });
     });
 
     describe("fallback resolve", function () {
