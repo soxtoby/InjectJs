@@ -35,7 +35,7 @@
 
             resolveChain.push(key);
             try {
-                return verifyType(key, resolveFunction(defaultFactory(key).withLifeTime)());
+                return verifyType(key, resolveFunction(defaultFactory(key))());
             } finally {
                 resolveChain.pop();
             }
@@ -104,7 +104,7 @@
             return new Registration().forType(type);
         },
 
-        forTypes: function(types) {
+        forTypes: function (types) {
             types.forEach(unary(call_(verifyIsFunction, "Registration type")));
             return new Registration().forTypes(types);
         },
@@ -118,7 +118,7 @@
             return new Registration().forKey(key);
         },
 
-        forKeys: function(keys) {
+        forKeys: function (keys) {
             return new Registration().forKeys(keys);
         },
 
@@ -141,7 +141,7 @@
         func: function (key, funcDependencies) {
             return new Registration(dependant([resolveFn, scopeFn], function (resolve, scope) {
                 return variadic(named(['('].concat((funcDependencies || []).map(name), ') -> ', name(key)), function (args) {
-                    return scope(null, resolve.function(resolve.defaultFactory(key), funcDependencies, args));
+                    return scope(null, resolve.function(resolve.defaultFactory(key).withoutLifeTime, funcDependencies, args));
                 }));
             }), null);
         },
@@ -199,7 +199,7 @@
             }),
 
             forKeys: chain(function forKeys(keys) {
-                if (keys.some(function(key) {return typeof key != 'string';}))
+                if (keys.some(function (key) { return typeof key != 'string'; }))
                     throw new Error("Registration key is not a string");
 
                 _keys = _keys.concat(keys);
@@ -300,10 +300,11 @@
                 if (notDefined(_factory))
                     throw new Error("No factory defined for " + name(self.keys()[0]) + " registration");
 
-                return extend(_factory, {
-                    withLifeTime: dependant([resolveFn, scopeFn, locals],
-                        _call(_lifeTime, _factory, registeredResolve, registeredScope))
-                });
+                return extend(dependant(
+                    [resolveFn, scopeFn, locals],
+                    _call(_lifeTime, _factory, registeredResolve, registeredScope)), {
+                        withoutLifeTime: _factory
+                    });
             }
         });
 
@@ -425,7 +426,7 @@
                         values.splice(i, 1);
                 },
                 values: function () {
-                    return flatMap(Object.keys(map), function(key) { return map[key]; });
+                    return flatMap(Object.keys(map), function (key) { return map[key]; });
                 },
                 all: all,
                 dispose: function () {

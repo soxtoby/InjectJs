@@ -67,7 +67,7 @@
                     expect(result).to.equal(null);
                 });
 
-                then("container can be disposed", function() {
+                then("container can be disposed", function () {
                     sut.dispose();
                 });
             });
@@ -90,13 +90,13 @@
             });
         });
 
-        when("resolving an object with a non-function dispose property", function() {
+        when("resolving an object with a non-function dispose property", function () {
             function undisposable() { }
             undisposable.prototype.dispose = 'foo';
 
             var result = sut(undisposable);
 
-            then("dispose property untouched", function() {
+            then("dispose property untouched", function () {
                 result.dispose.should.equal('foo');
             });
         });
@@ -145,32 +145,32 @@
             var outer = inject([inject.value(outerValue).forKey(outerKey)]);
             var inner = inject([registration], inject.fallback(fallbackFn, outer));
 
-            when("resolving key registered in inner container", function() {
+            when("resolving key registered in inner container", function () {
                 var result = inner(registeredKey);
 
-                then("registered value returned", function() {
+                then("registered value returned", function () {
                     result.should.equal(registeredValue);
                 });
             });
 
-            when("fallback returns value for key registered in outer container", function() {
+            when("fallback returns value for key registered in outer container", function () {
                 var fallbackValue = 'qux';
                 fallbackFn.withArgs(outerKey).returns(fallbackValue);
 
-                when("resolving key registered in outer container", function() {
+                when("resolving key registered in outer container", function () {
                     var result = inner(outerKey);
 
-                    then("fallback value returned", function() {
+                    then("fallback value returned", function () {
                         result.should.equal(fallbackValue);
                     });
                 });
             });
 
-            when("fallback returns nothing for key registered in outer container", function() {
-                when("resolving key registered in outer container", function() {
+            when("fallback returns nothing for key registered in outer container", function () {
+                when("resolving key registered in outer container", function () {
                     var result = inner(outerKey);
 
-                    then("outer container's value returned", function() {
+                    then("outer container's value returned", function () {
                         result.should.equal(outerValue);
                     });
                 });
@@ -362,19 +362,19 @@
                 });
             });
 
-            when("factory called for key, returning a string", function() {
+            when("factory called for key, returning a string", function () {
                 var expectedResult = 'baz';
                 registration.call(function () { return expectedResult; });
 
-                when("resolving key", function() {
+                when("resolving key", function () {
                     var sut = inject([registration]);
                     var result = sut(key);
 
-                    then("result is the factory return value", function() {
+                    then("result is the factory return value", function () {
                         result.should.equal(expectedResult);
                     });
 
-                    then("container can be disposed", function() {
+                    then("container can be disposed", function () {
                         sut.dispose();
                     });
                 });
@@ -446,19 +446,23 @@
                 it("instantiates the constructor", function () {
                     result.should.be.an.instanceOf(subType);
                 });
+
+                it("observes the lifetime of the registered type", function () {
+                    result.should.equal(sut(type));
+                });
             });
         });
 
         when("registering one constructor for multiple keys", function () {
-            when("registered for type more than once", function() {
+            when("registered for type more than once", function () {
                 testRegistrationForMultipleTypes(inject.type(subType).forType(type).forType(subType));
             });
 
-            when("registered for multiple types at once", function() {
+            when("registered for multiple types at once", function () {
                 testRegistrationForMultipleTypes(inject.type(subType).forTypes([type, subType]));
             });
 
-            when("type created for multiple-type registration", function() {
+            when("type created for multiple-type registration", function () {
                 testRegistrationForMultipleTypes(inject.forTypes([type, subType]).create(subType));
             });
 
@@ -525,7 +529,7 @@
             });
         });
 
-        when("registering a constructor with dependencies", function() {
+        when("registering a constructor with dependencies", function () {
             var sut = inject([inject.type(typeWithDependencies)]);
 
             assertFactoryFunctionDependencyResolution(sut);
@@ -817,7 +821,7 @@
     });
 
     describe("lifetimes", function () {
-        when("not registered", function() {
+        when("not registered", function () {
             assertInstancePerContainerLifeTime(inject());
         });
 
@@ -923,7 +927,7 @@
             });
 
             assertFactoryFunctionLifeTime(outer);
-            });
+        });
 
         when("registered with instance per container lifetime", function () {
             var registration = inject.type(disposableType);
