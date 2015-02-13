@@ -55,7 +55,7 @@
             if (injectedFn)
                 return injectedFn;
             if (isFunction(key))
-                return inject.type(key).build(resolve, scope);
+                return resolve.injected.add(key, inject.type(key).build(resolve, scope));
             throw new Error('Failed to resolve key ' + name(key) + resolveChainMessage());
         }
 
@@ -239,13 +239,13 @@
 
             once: chain(function once() {
                 _lifeTime = function singletonLifetime(factory, registeredResolve, registeredScope, resolve, currentScope) {
-                    return registeredScope(self.keys()[0], registeredResolve.function(factory));
+                    return registeredScope(self, registeredResolve.function(factory));
                 };
             }),
 
             perContainer: chain(function perContainer() {
                 _lifeTime = function perContainerLifetime(factory, registeredResolve, registeredScope, resolve, currentScope) {
-                    return currentScope(self.keys()[0], resolve.function(factory));
+                    return currentScope(self, resolve.function(factory));
                 };
             }),
 
@@ -367,9 +367,9 @@
             function scope(key, resolveForKey) {
                 return lookup(key, named(['(resolve ', key, ')'], function () {
                     var value = resolveForKey();
-                    if (key || isDisposable(value))
-                        lookup.add(key, disposable(key, value));
-                    return value;
+                    return key || isDisposable(value)
+                        ? lookup.add(key, disposable(key, value))
+                        : value;
                 }));
             }, {
                 dispose: function () {
@@ -442,6 +442,7 @@
             if (!map[key])
                 map[key] = [];
             map[key].push(value);
+            return value;
         }
 
         function all(key) {

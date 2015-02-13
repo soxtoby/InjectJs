@@ -404,6 +404,43 @@
             });
         });
 
+        when("registering multiple subtypes for the same base type", function () {
+            var subType2 = function () { };
+            subType2.prototype = new type();
+            var sut = inject([
+                inject.type(subType).forType(type),
+                inject.type(subType2).forType(type).perDependency()
+            ]);
+
+            when("resolving type", function () {
+                var result = sut(type);
+
+                then("last registration is resolved", function () {
+                    result.should.be.an.instanceOf(subType2);
+                });
+            });
+
+            when("resolving everything for type", function () {
+                var result = sut(inject.all(type));
+
+                then("all registrations are resolved", function () {
+                    result.should.have.length(2);
+                    result[0].should.be.an.instanceOf(subType);
+                    result[1].should.be.an.instanceOf(subType2);
+                });
+            });
+
+            when("resolving everything for type twice", function () {
+                var result1 = sut(inject.all(type));
+                var result2 = sut(inject.all(type));
+
+                then("lifetimes are observed", function () {
+                    result1[0].should.equal(result2[0]); // per-container
+                    result1[1].should.not.equal(result2[1]); // per-dependency
+                });
+            });
+        });
+
         when("registering a constructor", function () {
             var registration = inject.type(type);
             var sut = inject([registration]);
