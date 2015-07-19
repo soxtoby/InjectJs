@@ -48,14 +48,16 @@
         }
 
         function defaultFactory(key) {
-            var injectedFn = resolve.injected(key);
+            var injectedFn;
 
             if (key instanceof Registration)
                 return key.build(resolve, scope);
-            if (injectedFn)
+            if (injectedFn = resolve.injected(key))
                 return injectedFn;
-            if (isFunction(key))
+            if (isConstructor(key))
                 return resolve.injected.add(key, inject.type(key).build(resolve, scope));
+            if (isFunction(key))
+                return resolve.injected.add(key, inject.function(key)).build(resolve, scope);
             throw new Error('Failed to resolve key ' + name(key) + resolveChainMessage());
         }
 
@@ -81,6 +83,10 @@
         resolve: resolveFn,
 
         dependant: dependant,
+
+        dependantFn: function (dependencies, fn) {
+            return extend(dependant(dependencies, fn), { _justAFunction: true });
+        },
 
         ctor: function (dependencies, fn) {
             verifyArity(dependencies, fn);
@@ -180,8 +186,8 @@
 
         extend(self, {
             keys: function () {
-                return !_keys.length && _constructor
-                    ? [_constructor]
+                return !_keys.length && (_constructor || _function)
+                    ? [_constructor || _function]
                     : _keys;
             },
 
@@ -327,8 +333,8 @@
 
             if (isDefined(_function)) {
                 verifyIsFunction(_function);
-                if (self.keys().some(isFunction))
-                    throw new Error("A type cannot be resolved to a function");
+                if (self.keys().filter(isFunction).some(function (k) { return k != _function }))
+                    throw new Error("A function can only be registered for a string key or itself");
             }
 
             if (isDefined(_factory))
@@ -463,7 +469,7 @@
             throw new Error(name(key) + " resolved to undefined" + resolveChainMessage());
         if (value === null)
             return value;
-        if (isFunction(key) && !(value instanceof key))
+        if (isConstructor(key) && !(value instanceof key))
             throw new Error('Value does not inherit from ' + name(key));
         return value;
     }
@@ -587,6 +593,10 @@
                 ? value.displayName
                 : value.name || 'anonymous function'
             : value
+    }
+
+    function isConstructor(fn) {
+        return isFunction(fn) && !fn._justAFunction;
     }
 
     function isFunction(fn) {

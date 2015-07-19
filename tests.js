@@ -82,6 +82,33 @@
             });
         });
 
+        when("resolving existing dependant function", function() {
+            var expectedResult = 'baz';
+            var functionWithDependencies = inject.dependantFn(
+                [dependency1, dependency2],
+                sinon.stub().returns(expectedResult));
+            var result = sut(functionWithDependencies);
+
+            it("resolves to a function", function() {
+                result.should.be.a('function');
+            });
+
+            when("result is called", function() {
+                var resultResult = result('foo', 'bar');
+
+                then("function is called with dependencies and passed in arguments", function() {
+                    functionWithDependencies.should.have.been.calledWith(
+                        sinon.match.instanceOf(dependency1),
+                        sinon.match.instanceOf(dependency2),
+                        'foo', 'bar');
+                });
+
+                it("returns function return value", function () {
+                    resultResult.should.equal(expectedResult);
+                });
+            });
+        });
+
         when("resolving a container", function () {
             var result = sut(inject.resolve);
 
@@ -1238,7 +1265,7 @@
                 var action = function () { registration.resolveFunction(function () { }); };
 
                 it("throws", function () {
-                    action.should.throw("A type cannot be resolved to a function");
+                    action.should.throw("A function can only be registered for a string key or itself");
                 });
             });
 
@@ -1278,7 +1305,7 @@
                 var action = function () { registration.forType(type); };
 
                 it("throws", function () {
-                    action.should.throw("A type cannot be resolved to a function");
+                    action.should.throw("A function can only be registered for a string key or itself");
                 });
             });
         });
