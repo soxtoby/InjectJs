@@ -84,10 +84,9 @@
 
         when("resolving existing dependant function", function() {
             var expectedResult = 'baz';
-            var functionWithDependencies = inject.dependantFn(
-                [dependency1, dependency2],
-                sinon.stub().returns(expectedResult));
-            var result = sut(functionWithDependencies);
+            var functionWithDependencies = sinon.stub().returns(expectedResult);
+            var dependantFunction = inject.dependantFn([dependency1, dependency2], functionWithDependencies);
+            var result = sut(dependantFunction);
 
             it("resolves to a function", function() {
                 result.should.be.a('function');
