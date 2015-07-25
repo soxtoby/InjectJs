@@ -90,6 +90,14 @@ declare var inject: {
      */
     dependant<T extends Function>(dependencies: Inject.Dependency[], fn: T): T;
 
+    /**
+     * Annotates function as an injectable function with provided dependencies.
+     * @throws
+     * if there are more dependencies than function parameters,
+     * or if any dependencies are undefined.
+     */
+    dependantFn<T extends Function>(dependencies: Inject.Dependency[], fn: T): T;
+
     /** 
      * Annotates function with provided dependencies.
      * @throws
