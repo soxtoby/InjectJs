@@ -84,7 +84,7 @@
 
         when("resolving existing dependant function", function() {
             var expectedResult = 'baz';
-            var functionWithDependencies = sinon.stub().returns(expectedResult);
+            var functionWithDependencies = sinon.spy(function (d1, d2, p1, p2) { return expectedResult; });
             var dependantFunction = inject.dependantFn([dependency1, dependency2], functionWithDependencies);
             var result = sut(dependantFunction);
 
@@ -1368,7 +1368,7 @@
             return function () { inject.ctor([undefined], constructor); };
         }
 
-        when("specifying wrong number of dependencies", function () {
+        when("specifying wrong number of dependencies in constructor", function () {
             it("throws", function () {
                 (function () {
                     inject.ctor(['foo', 'bar'], function (baz) { });
@@ -1377,6 +1377,14 @@
                 (function () {
                     inject.ctor(['foo'], function () { });
                 }).should.throw("Type has 1 dependency, but 0 parameters");
+            });
+        });
+
+        when("specifying too many dependencies in dependant function", function() {
+            it("throws", function() {
+                (function () {
+                    inject.dependantFn(['foo', 'bar'], function (baz) { });
+                }).should.throw("Type has more dependencies than parameters");
             });
         });
     });

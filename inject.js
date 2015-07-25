@@ -52,10 +52,13 @@
 
             if (injectedFn)
                 return injectedFn;
-            if (isConstructor(key))
+            if (isFunction(key)) {
+                if (key.isDependantFn)
+                    return inject.function(key).build(resolve, scope);
+                if (key.isFactory)
+                    return inject.factory(key).build(resolve, scope);
                 return resolve.injected.add(key, inject.type(key).build(resolve, scope));
-            if (isFunction(key))
-                return inject.factory(key).build(resolve, scope);
+            }
             throw new Error('Failed to resolve key ' + name(key) + resolveChainMessage());
         }
 
@@ -82,13 +85,11 @@
 
         dependant: dependant,
 
-        dependantFn: function dependantFn(dependencies, fn) {
-            fn = isFunction(dependencies)
-                ? dependencies
-                : dependant(dependencies, fn);
-            return factory(dependant([resolveFn, locals], function (resolve, local) {
-                return resolve.function(fn, local.keys, local.values);
-            }));
+        dependantFn: function (dependencies, fn) {
+            if (dependencies.length > fn.length)
+                throw new Error(name(fn) + " has more dependencies than parameters");
+
+            return extend(dependant(dependencies, fn), { isDependantFn: true });
         },
 
         ctor: function (dependencies, fn) {
@@ -600,7 +601,9 @@
     }
 
     function isConstructor(fn) {
-        return isFunction(fn) && !fn.isFactory;
+        return isFunction(fn)
+            && !fn.isFactory
+            && !fn.isDependantFn;
     }
 
     function isFunction(fn) {
