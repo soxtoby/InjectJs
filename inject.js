@@ -54,9 +54,9 @@
                 return injectedFn;
             if (isFunction(key)) {
                 if (key.isDependantFn)
-                    return inject.function(key).build(resolve, scope);
+                    return inject.function(key).perDependency().build(resolve, scope);
                 if (key.isFactory)
-                    return inject.factory(key).build(resolve, scope);
+                    return inject.factory(key).perDependency().build(resolve, scope);
                 return resolve.injected.add(key, inject.type(key).build(resolve, scope));
             }
             throw new Error('Failed to resolve key ' + name(key) + resolveChainMessage());

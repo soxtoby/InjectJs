@@ -701,7 +701,7 @@
 
             when("registration is set up for key", function () {
                 registration.forKey('key');
-                var sut = inject([registration]);
+                var sut = inject([registration, inject.type(dependency2).perDependency()]);
 
                 when("key is resolved", function () {
                     var result = sut('key');
@@ -719,6 +719,19 @@
 
                         it("returns function return value", function () {
                             resultResult.should.equal(expectedResult);
+                        });
+                    });
+
+                    when("result is called twice", function() {
+                        result();
+                        result();
+
+                        then("dependency lifetimes respected", function() {
+                            var firstCall = func.getCall(0);
+                            var secondCall = func.getCall(1);
+
+                            firstCall.args[0].should.equal(secondCall.args[0], "dependency1 is per-container");
+                            firstCall.args[1].should.not.equal(secondCall.args[1], "dependency2 is per-dependency");
                         });
                     });
                 });
