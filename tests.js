@@ -901,6 +901,22 @@
             assertInstancePerContainerLifeTime(inject());
         });
 
+        when("sub-type's prototype is super-type", function () {
+            // This is how TypeScript 2.2 get sub-classes to inherit static properties from super-classes
+            Object.setPrototypeOf(subType, type);
+
+            when("resolving super-type then sub-type", function () {
+                var resolve = inject();
+                var superResult = resolve(type);
+                var subResult = resolve(subType);
+
+                it("resolves sub-type correctly", function () { 
+                    superResult.should.be.an.instanceOf(type);
+                    subResult.should.be.an.instanceOf(subType);
+                })
+            })
+        })
+
         when("registered as singleton in outer container", function () {
             var registration = inject.type(disposableType);
             var chain = registration.once();

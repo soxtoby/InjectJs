@@ -464,7 +464,7 @@
         function mapKey(key) {
             return !key ? '\0'
                 : typeof key == 'string' ? key
-                : key._injectKey ? key._injectKey
+                : key.hasOwnProperty('_injectKey') ? key._injectKey
                 : (key._injectKey = uid++);
         }
     }
